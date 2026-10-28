@@ -1,0 +1,53 @@
+{
+  "source": "data/raw/figshare_classification_4class",
+  "source_images": 7200,
+  "excluded": 215,
+  "excluded_by_reason": {
+    "Pre-augmented copies (meningioma only, train and test). Augmentation is applied on the fly during training instead.": 203,
+    "Label conflict: identical image labelled glioma and meningioma (review cluster 41)": 7,
+    "Label conflict: identical image labelled glioma and meningioma (review cluster 196)": 3,
+    "Label conflict: augmented 'meningioma' image matching pituitary images (review cluster 206)": 2
+  },
+  "kept": 6985,
+  "clusters": 746,
+  "images_in_clusters": 2436,
+  "clusters_split_across_splits": 0,
+  "dedup": {
+    "max_phash": 4,
+    "max_dhash": 4,
+    "hash_size": 8
+  },
+  "split": {
+    "ratios": {
+      "train": 0.7,
+      "val": 0.15,
+      "test": 0.15
+    },
+    "seed": 42
+  },
+  "counts": {
+    "train": {
+      "glioma": 1258,
+      "meningioma": 1112,
+      "notumor": 1260,
+      "pituitary": 1258
+    },
+    "val": {
+      "glioma": 270,
+      "meningioma": 239,
+      "notumor": 270,
+      "pituitary": 270
+    },
+    "test": {
+      "glioma": 270,
+      "meningioma": 238,
+      "notumor": 270,
+      "pituitary": 270
+    }
+  },
+  "totals": {
+    "train": 4888,
+    "val": 1049,
+    "test": 1048
+  }
+}

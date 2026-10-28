@@ -1,0 +1,54 @@
+{
+  "source": "data/raw/figshare_classification_4class",
+  "kaggle_dataset": "masoudnickparvar/brain-tumor-mri-dataset",
+  "output": "data/processed/figshare_classification_4class_clean",
+  "dedup": {
+    "max_phash": 4,
+    "max_dhash": 4,
+    "hash_size": 8
+  },
+  "split": {
+    "ratios": {"train": 0.70, "val": 0.15, "test": 0.15},
+    "seed": 42
+  },
+  "exclude_filename_marker": {
+    "marker": "-aug-",
+    "reason": "Pre-augmented copies (meningioma only, train and test). Augmentation is applied on the fly during training instead."
+  },
+  "exclude_files": [
+    {
+      "reason": "Label conflict: identical image labelled glioma and meningioma (review cluster 41)",
+      "files": [
+        "Testing/glioma/Te-gl_68.jpg",
+        "Testing/meningioma/Te-me_50.jpg",
+        "Testing/meningioma/Te-me_61.jpg",
+        "Testing/meningioma/Te-me_96.jpg",
+        "Training/meningioma/Tr-me_458.jpg",
+        "Training/meningioma/Tr-me_468.jpg",
+        "Training/meningioma/Tr-me_714.jpg"
+      ]
+    },
+    {
+      "reason": "Label conflict: identical image labelled glioma and meningioma (review cluster 196)",
+      "files": [
+        "Testing/glioma/Te-gl_160.jpg",
+        "Testing/meningioma/Te-me_159.jpg",
+        "Training/meningioma/Tr-me_1122.jpg"
+      ]
+    },
+    {
+      "reason": "Label conflict: augmented 'meningioma' image matching pituitary images (review cluster 206)",
+      "files": [
+        "Testing/meningioma/Te-aug-me_35.jpg",
+        "Training/pituitary/Tr-pi_1309.jpg",
+        "Training/pituitary/Tr-pi_261.jpg"
+      ]
+    }
+  ],
+  "ignore_pairs": [
+    {
+      "reason": "False match at the 4/4 threshold boundary: different patients and slices (review cluster 205)",
+      "files": ["Testing/glioma/Te-gl_75.jpg", "Testing/meningioma/Te-me_283.jpg"]
+    }
+  ]
+}

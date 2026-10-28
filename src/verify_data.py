@@ -8,6 +8,7 @@ Usage:
 import argparse
 import hashlib
 from collections import Counter, defaultdict
+from concurrent.futures import ThreadPoolExecutor
 
 import h5py
 import nibabel as nib
@@ -26,28 +27,43 @@ def dir_size_gb(path):
     return sum(f.stat().st_size for f in path.rglob("*") if f.is_file()) / 1e9
 
 
-def verify_brats():
-    cases = sorted(p for p in BRATS_DIR.rglob("BraTS2021_*") if p.is_dir())
+def _check_brats_case(case):
+    """Fully decode every volume of one case; gzip CRC errors surface as exceptions."""
+    result = {"missing": [], "errors": [], "shapes": [], "seg_labels": []}
+    for modality in BRATS_MODALITIES:
+        path = case / f"{case.name}_{modality}.nii.gz"
+        if not path.exists():
+            result["missing"].append(modality)
+            continue
+        try:
+            img = nib.load(path)
+            data = np.asarray(img.dataobj)
+            if not np.isfinite(data).all():
+                raise ValueError("non-finite voxel values")
+            result["shapes"].append(img.shape)
+            if modality == "seg":
+                result["seg_labels"] = np.unique(data).astype(int).tolist()
+        except Exception as exc:
+            result["errors"].append((path.name, repr(exc)))
+    return case.name, result
+
+
+def verify_brats(workers=8):
+    cases = sorted(p for p in BRATS_DIR.glob("BraTS2021_*") if p.is_dir())
     incomplete, unreadable = [], []
     label_counts = Counter()
     shapes = Counter()
 
-    for case in cases:
-        files = {m: case / f"{case.name}_{m}.nii.gz" for m in BRATS_MODALITIES}
-        missing = [m for m, f in files.items() if not f.exists()]
-        if missing:
-            incomplete.append((case.name, missing))
-            continue
-        for modality, path in files.items():
-            try:
-                img = nib.load(path)
-                if modality == "seg":
-                    # Full decompression of the mask catches truncated archives.
-                    seg = np.asarray(img.dataobj)
-                    label_counts.update(np.unique(seg).astype(int).tolist())
-                shapes[img.shape] += 1
-            except Exception as exc:
-                unreadable.append((path.name, repr(exc)))
+    # Decompression is zlib-bound and releases the GIL, so threads parallelise well.
+    with ThreadPoolExecutor(max_workers=workers) as pool:
+        for done, (name, res) in enumerate(pool.map(_check_brats_case, cases), 1):
+            if res["missing"]:
+                incomplete.append((name, res["missing"]))
+            unreadable.extend(res["errors"])
+            shapes.update(res["shapes"])
+            label_counts.update(res["seg_labels"])
+            if done % 100 == 0 or done == len(cases):
+                print(f"  checked {done}/{len(cases)} cases, {len(unreadable)} errors so far", flush=True)
 
     print(f"BraTS2021 root:    {BRATS_DIR}")
     print(f"Size on disk:      {dir_size_gb(BRATS_DIR):.2f} GB")
