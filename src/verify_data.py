@@ -1,17 +1,22 @@
 """Check that downloaded raw datasets are complete and readable, and print stats.
 
 Usage:
+    python -m src.verify_data classification
     python -m src.verify_data brats
-    python -m src.verify_data figshare
+    python -m src.verify_data figshare3
 """
 import argparse
-from collections import Counter
+import hashlib
+from collections import Counter, defaultdict
 
 import h5py
 import nibabel as nib
 import numpy as np
+from PIL import Image
 
-from src.config import BRATS_DIR, FIGSHARE_DIR
+from src.config import BRATS_DIR, CLASSIFICATION_DIR, FIGSHARE_3CLASS_DIR
+
+IMAGE_SUFFIXES = {".jpg", ".jpeg", ".png"}
 
 BRATS_MODALITIES = ("flair", "t1", "t1ce", "t2", "seg")
 FIGSHARE_LABELS = {1: "meningioma", 2: "glioma", 3: "pituitary"}
@@ -53,8 +58,56 @@ def verify_brats():
     print(f"Cases containing each seg label: {dict(sorted(label_counts.items()))}")
 
 
-def verify_figshare():
-    mats = sorted(FIGSHARE_DIR.rglob("*.mat"))
+def verify_classification():
+    # Layout: <split>/<class>/<image>
+    images = sorted(p for p in CLASSIFICATION_DIR.rglob("*") if p.suffix.lower() in IMAGE_SUFFIXES)
+    counts = defaultdict(Counter)
+    sizes, modes = Counter(), Counter()
+    hashes = defaultdict(list)
+    unreadable = []
+
+    for path in images:
+        split, label = path.parent.parent.name, path.parent.name
+        try:
+            with Image.open(path) as img:
+                img.load()  # full decode, not just the header
+                sizes[img.size] += 1
+                modes[img.mode] += 1
+        except Exception as exc:
+            unreadable.append((str(path.relative_to(CLASSIFICATION_DIR)), repr(exc)))
+            continue
+        counts[split][label] += 1
+        hashes[hashlib.md5(path.read_bytes()).hexdigest()].append((split, label))
+
+    print(f"Classification root: {CLASSIFICATION_DIR}")
+    print(f"Size on disk:        {dir_size_gb(CLASSIFICATION_DIR):.3f} GB")
+    print(f"Images:              {len(images)}")
+    print(f"Unreadable files:    {len(unreadable)} {unreadable[:5]}")
+    print(f"Image modes:         {dict(modes)}")
+    print(f"Distinct sizes:      {len(sizes)}; most common {sizes.most_common(5)}")
+
+    labels = sorted({label for c in counts.values() for label in c})
+    totals = Counter()
+    print(f"\n{'class':<12}" + "".join(f"{s:>10}" for s in sorted(counts)) + f"{'total':>10}")
+    for label in labels:
+        row = [counts[s][label] for s in sorted(counts)]
+        totals[label] = sum(row)
+        print(f"{label:<12}" + "".join(f"{n:>10}" for n in row) + f"{sum(row):>10}")
+    if totals:
+        print(f"Imbalance ratio (largest/smallest class): {max(totals.values()) / min(totals.values()):.2f}")
+
+    dupes = [v for v in hashes.values() if len(v) > 1]
+    cross_split = [v for v in dupes if len({s for s, _ in v}) > 1]
+    cross_label = [v for v in dupes if len({l for _, l in v}) > 1]
+    print("\nExact duplicates (identical bytes):")
+    print(f"  duplicate groups:           {len(dupes)} ({sum(len(v) - 1 for v in dupes)} redundant files)")
+    print(f"  groups spanning splits:     {len(cross_split)}  (train/test leakage)")
+    print(f"  groups with conflicting labels: {len(cross_label)}")
+
+
+def verify_figshare_3class():
+    # Images are numbered <n>.mat; cvind.mat holds the cross-validation fold indices.
+    mats = sorted(p for p in FIGSHARE_3CLASS_DIR.rglob("*.mat") if p.stem.isdigit())
     classes = Counter()
     patients = set()
     shapes = Counter()
@@ -74,8 +127,8 @@ def verify_figshare():
         except Exception as exc:
             unreadable.append((path.name, repr(exc)))
 
-    print(f"Figshare root:     {FIGSHARE_DIR}")
-    print(f"Size on disk:      {dir_size_gb(FIGSHARE_DIR):.2f} GB")
+    print(f"Figshare root:     {FIGSHARE_3CLASS_DIR}")
+    print(f"Size on disk:      {dir_size_gb(FIGSHARE_3CLASS_DIR):.2f} GB")
     print(f".mat images:       {len(mats)}")
     print(f"Unreadable files:  {len(unreadable)} {unreadable[:5]}")
     print(f"Unique patients:   {len(patients)}")
@@ -87,9 +140,13 @@ def verify_figshare():
 
 def main():
     parser = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
-    parser.add_argument("dataset", choices=["brats", "figshare"])
+    parser.add_argument("dataset", choices=["classification", "brats", "figshare3"])
     args = parser.parse_args()
-    {"brats": verify_brats, "figshare": verify_figshare}[args.dataset]()
+    {
+        "classification": verify_classification,
+        "brats": verify_brats,
+        "figshare3": verify_figshare_3class,
+    }[args.dataset]()
 
 
 if __name__ == "__main__":

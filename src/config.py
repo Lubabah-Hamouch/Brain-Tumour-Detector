@@ -21,4 +21,7 @@ RAW_DIR = DATA_DIR / "raw"
 PROCESSED_DIR = DATA_DIR / "processed"
 
 BRATS_DIR = RAW_DIR / "brats2021"
-FIGSHARE_DIR = RAW_DIR / "figshare_classification"
+# Primary classification data: 4 classes (glioma, meningioma, pituitary, no tumor).
+CLASSIFICATION_DIR = RAW_DIR / "figshare_classification_4class"
+# Original 3-class Figshare release, kept for comparison only.
+FIGSHARE_3CLASS_DIR = RAW_DIR / "figshare_classification_3class"
