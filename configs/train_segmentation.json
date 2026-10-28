@@ -3,9 +3,18 @@
   "grad_accum_steps": 2,
   "mixed_precision": true,
   "seed": 42,
+  "epochs": 1,
+  "num_workers": 2,
+  "max_step_seconds": 3.0,
   "patch_size": 128,
   "tumor_ratio": 0.75,
   "widths": [32, 64, 128, 256],
   "bottleneck": 320,
-  "deep_supervision": 2
+  "deep_supervision": 2,
+  "level_weights": [0.25, 0.5, 1.0],
+  "lr": 0.0003,
+  "weight_decay": 3e-05,
+  "grad_clip": 12.0,
+  "val_fraction": 0.2,
+  "wandb_project": "brain-tumor-segmentation"
 }

@@ -197,25 +197,33 @@ def run(cfg, workers=1):
 class BratsPatchDataset(Dataset):
     """On-the-fly tumour-biased patch sampling from preprocessed volumes (mode=volumes).
 
-    Each item draws a fresh patch, so every epoch sees different crops.
+    Each item draws a fresh patch, so every epoch sees different crops (call
+    set_epoch() each epoch). Randomness is derived from (seed, epoch, index),
+    so DataLoader worker processes, which each receive a copy of the dataset,
+    do not draw identical patches.
     Returns (image float32 (C, P, P, P), targets float32 (3, P, P, P)).
     """
 
-    def __init__(self, volume_dir, case_ids, patch_size=128, tumor_ratio=0.75, samples_per_case=1, seed=None):
+    def __init__(self, volume_dir, case_ids, patch_size=128, tumor_ratio=0.75, samples_per_case=1, seed=0):
         self.paths = [Path(volume_dir) / f"{c}.npz" for c in case_ids]
         self.patch_size = patch_size
         self.tumor_ratio = tumor_ratio
         self.samples_per_case = samples_per_case
-        self.rng = np.random.default_rng(seed)
+        self.seed = seed
+        self.epoch = 0
+
+    def set_epoch(self, epoch):
+        self.epoch = epoch
 
     def __len__(self):
         return len(self.paths) * self.samples_per_case
 
     def __getitem__(self, index):
+        rng = np.random.default_rng((self.seed, self.epoch, index))
         with np.load(self.paths[index // self.samples_per_case]) as data:
             image, targets = data["image"], data["targets"]
-        biased = self.rng.random() < self.tumor_ratio
-        (start, _), = patch_starts(targets, 1, 1.0 if biased else 0.0, self.patch_size, self.rng)
+        biased = rng.random() < self.tumor_ratio
+        (start, _), = patch_starts(targets, 1, 1.0 if biased else 0.0, self.patch_size, rng)
         return (extract(image, start, self.patch_size).astype(np.float32),
                 extract(targets, start, self.patch_size).astype(np.float32))
 

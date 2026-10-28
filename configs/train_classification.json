@@ -3,7 +3,14 @@
   "grad_accum_steps": 1,
   "mixed_precision": true,
   "seed": 42,
+  "epochs": 1,
+  "num_workers": 2,
+  "max_step_seconds": 3.0,
   "image_size": 384,
   "pretrained": true,
-  "freeze_backbone": false
+  "freeze_backbone": false,
+  "backbone_lr": 0.0001,
+  "head_lr": 0.001,
+  "weight_decay": 0.01,
+  "wandb_project": "brain-tumor-classification"
 }

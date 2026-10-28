@@ -20,6 +20,13 @@ class TrainConfig:
     grad_accum_steps: int = 1
     mixed_precision: bool = True
     seed: int = 42
+    epochs: int = 1
+    weight_decay: float = 0.0
+    num_workers: int = 2
+    # A compute step far slower than profiled usually means the Windows driver
+    # has spilled GPU memory into system RAM; training stops instead of crawling.
+    max_step_seconds: float = 3.0
+    wandb_project: str = ""
 
     @property
     def effective_batch_size(self):
@@ -36,7 +43,7 @@ class TrainConfig:
         unknown = set(values) - known
         if unknown:
             raise ValueError(f"Unknown {cls.__name__} keys: {sorted(unknown)}")
-        for key in ("widths",):
+        for key in ("widths", "level_weights"):
             if key in values:
                 values[key] = tuple(values[key])
         return cls(**values)
@@ -57,6 +64,16 @@ class SegmentationTrainConfig(TrainConfig):
     widths: tuple = (32, 64, 128, 256)
     bottleneck: int = 320
     deep_supervision: int = 2
+    # Deep-supervision loss weights, coarsest output first (normalised in the loss).
+    level_weights: tuple = (0.25, 0.5, 1.0)
+    # AdamW at 3e-4 is a standard, stable rate for 3D U-Nets trained from
+    # scratch; weight decay 3e-5 follows nnU-Net. Clipping at 12 (also nnU-Net)
+    # guards against rare gradient spikes from Dice on near-empty regions.
+    lr: float = 3e-4
+    weight_decay: float = 3e-5
+    grad_clip: float = 12.0
+    val_fraction: float = 0.2
+    wandb_project: str = "brain-tumor-segmentation"
 
 
 @dataclass
@@ -66,3 +83,12 @@ class ClassificationTrainConfig(TrainConfig):
     image_size: int = 384
     pretrained: bool = True
     freeze_backbone: bool = False
+    # Discriminative learning rates: the pretrained backbone already holds useful
+    # features and needs only small adjustments (a large rate would overwrite
+    # them), while the randomly initialised head must learn from scratch, so it
+    # gets a 10x higher rate. 1e-4 is a common AdamW fine-tuning rate for
+    # ImageNet-pretrained CNNs; weight decay 1e-2 is the AdamW default.
+    backbone_lr: float = 1e-4
+    head_lr: float = 1e-3
+    weight_decay: float = 1e-2
+    wandb_project: str = "brain-tumor-classification"
