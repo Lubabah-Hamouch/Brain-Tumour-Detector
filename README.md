@@ -13,7 +13,6 @@ notebooks/   Exploration only
 src/         Pipeline code: data loading, preprocessing, training, evaluation
 reports/     Generated figures and metrics
 tests/       Tests
-docs/        Project documents
 ```
 
 ## Setup
