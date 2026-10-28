@@ -1,0 +1,8 @@
+{
+  "modalities": ["flair", "t1", "t1ce", "t2"],
+  "patch_size": 128,
+  "patches_per_volume": 4,
+  "tumor_ratio": 0.75,
+  "seed": 42,
+  "mode": "volumes"
+}

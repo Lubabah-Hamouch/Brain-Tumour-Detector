@@ -20,6 +20,9 @@ import shutil
 from collections import Counter, defaultdict
 from pathlib import Path
 
+import numpy as np
+from PIL import Image
+
 from src.config import PROJECT_ROOT
 from src.data.dedup import collect_images, compute_hashes, find_clusters
 
@@ -47,6 +50,27 @@ def apply_exclusions(records, config):
                 raise FileNotFoundError(f"Excluded file not in dataset: {path}")
             excluded.setdefault(path, group["reason"])
     return [r for r in records if r.path not in excluded], excluded
+
+
+def colour_spread(path):
+    """Max per-pixel channel difference (R-G plus G-B); 0 for grayscale content."""
+    with Image.open(path) as img:
+        if img.mode not in ("RGB", "RGBA", "P"):
+            return 0
+        rgb = np.asarray(img.convert("RGB"), dtype=np.int16)
+    return int(np.abs(rgb[..., 0] - rgb[..., 1]).max() + np.abs(rgb[..., 1] - rgb[..., 2]).max())
+
+
+def find_post_split_drops(source, records, config):
+    """Images removed after split assignment, so every other image keeps its split."""
+    rule = config.get("drop_after_split")
+    if not rule:
+        return {}
+    return {
+        k: rule["reason"]
+        for k, rec in enumerate(records)
+        if colour_spread(source / rec.path) > rule["colour_threshold"]
+    }
 
 
 def assign_groups(groups, records, ratios, seed):
@@ -96,17 +120,22 @@ def build(config, dry_run=False):
     singletons = [[k] for k in range(len(kept)) if k not in cluster_of]
     assignment = assign_groups(clusters + singletons, kept, config["split"]["ratios"], config["split"]["seed"])
 
+    # Removing images never moves the rest, so cluster integrity across splits is preserved.
+    for k, reason in find_post_split_drops(source, kept, config).items():
+        del assignment[k]
+        excluded[kept[k].path] = reason
+
     counts = {s: Counter() for s in SPLITS}
     for k, split in assignment.items():
         counts[split][kept[k].label] += 1
-    leaks = sum(1 for c in clusters if len({assignment[k] for k in c}) > 1)
+    leaks = sum(1 for c in clusters if len({assignment[k] for k in c if k in assignment}) > 1)
 
     summary = {
         "source": config["source"],
         "source_images": len(records),
         "excluded": len(excluded),
         "excluded_by_reason": dict(Counter(excluded.values())),
-        "kept": len(kept),
+        "kept": len(assignment),
         "clusters": len(clusters),
         "images_in_clusters": sum(len(c) for c in clusters),
         "clusters_split_across_splits": leaks,

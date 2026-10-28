@@ -45,6 +45,10 @@
       ]
     }
   ],
+  "drop_after_split": {
+    "colour_threshold": 30,
+    "reason": "Coloured overlay (website watermark text or border lines); all such images are notumor, a label shortcut. Dropped after split assignment so no other image changes split."
+  },
   "ignore_pairs": [
     {
       "reason": "False match at the 4/4 threshold boundary: different patients and slices (review cluster 205)",

@@ -7,6 +7,7 @@ everything under `data/raw/` and `data/processed/` is gitignored.
 |---|---|---|---|
 | `raw/figshare_classification_4class/` | Brain Tumor MRI Dataset: glioma, meningioma, pituitary, no tumor (Figshare + SARTAJ + Br35H) | Classification (primary) | Kaggle `masoudnickparvar/brain-tumor-mri-dataset` |
 | `raw/brats2021/` | BraTS 2021 Task 1 (glioma segmentation, multimodal MRI) | Segmentation | Kaggle `dschettler8845/brats-2021-task1` |
+| `processed/brats2021_preprocessed/` | BraTS 2021, z-scored in brain mask, cropped to brain, WT/TC/ET targets (one `.npz` per case, ~12 GB) | Segmentation input for on-the-fly patch sampling | `python -m src.data.segmentation_preprocess --config configs/segmentation_preprocess.json --workers 3` |
 | `raw/figshare_classification_3class/` | Original Figshare release (Cheng et al.): glioma, meningioma, pituitary | Comparison only | Kaggle `ashkhagan/figshare-brain-tumor-dataset` |
 
 ## Cleaned classification split
@@ -23,7 +24,8 @@ because it leaks near-duplicate images across splits.
 
 Steps: drop pre-augmented `-aug-` files and label-conflict clusters; group near-duplicates
 (pHash and dHash Hamming distance <= 4) into clusters; assign each cluster wholly to one split,
-stratified by class, 70/15/15.
+stratified by class, 70/15/15. After assignment, images with coloured overlays (website
+watermarks, all notumor, 34 images) are dropped; nothing else changes split.
 
 ```bash
 python -m src.data.make_split data/manifests/figshare_4class_cleaning.json
