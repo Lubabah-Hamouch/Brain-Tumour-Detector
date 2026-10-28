@@ -31,6 +31,22 @@ watermarks, all notumor, 34 images) are dropped; nothing else changes split.
 python -m src.data.make_split data/manifests/figshare_4class_cleaning.json
 ```
 
+## BraTS test set and cross-validation folds
+
+`manifests/brats_5fold_splits.json` assigns every preprocessed BraTS2021 case (one case per
+patient) to either the held-out test set (189 cases, 15%) or one of 5 cross-validation folds
+(212-213 cases each). The test cases are never used for training, validation or model
+selection, only for final reporting. Fold k validates on `folds[k]` and trains on the other
+four folds.
+
+Assignment is stratified (seed 42): cases without enhancing tumour form one stratum, and cases
+with it are binned by whole-tumour volume quartile. The manifest also stores per-case WT/TC/ET
+voxel counts, so the balance can be checked.
+
+```bash
+python -m src.data.make_brats_folds
+```
+
 ## Pretrained weights
 
 The classifier loads torchvision's ImageNet weights for EfficientNetV2-S. On first use they are

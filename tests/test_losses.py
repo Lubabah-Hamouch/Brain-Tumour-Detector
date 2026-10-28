@@ -42,11 +42,11 @@ def test_breakdown_sums_to_total():
     target = make_target()
     outputs = [torch.randn_like(o) for o in pyramid(target)]
     total, parts = DeepSupervisionDiceBCELoss()(outputs, target)
-    by_level = sum(v for k, v in parts.items() if k.startswith("level/"))
-    by_region = sum(v for k, v in parts.items() if k.startswith(("dice/", "bce/")))
+    by_level = sum(v for k, v in parts.items() if k.startswith("level_loss/"))
+    by_region = sum(v for k, v in parts.items() if k.startswith(("dice_loss/", "bce_loss/")))
     assert by_level == pytest.approx(total.item(), rel=1e-5)
     assert by_region == pytest.approx(total.item(), rel=1e-5)
-    assert set(parts) >= {"dice/WT", "dice/TC", "dice/ET", "bce/WT", "bce/TC", "bce/ET", "level/0", "level/1", "level/2"}
+    assert set(parts) >= {"dice_loss/WT", "dice_loss/TC", "dice_loss/ET", "bce_loss/WT", "bce_loss/TC", "bce_loss/ET", "level_loss/0", "level_loss/1", "level_loss/2"}
 
 
 def test_level_weights_favour_the_final_output():
@@ -67,9 +67,9 @@ def test_regions_are_independent():
         o[:, 2] = -o[:, 2]
     _, clean = DeepSupervisionDiceBCELoss()(outputs, target)
     _, parts = DeepSupervisionDiceBCELoss()(broken, target)
-    for key in ("dice/WT", "dice/TC", "bce/WT", "bce/TC"):
+    for key in ("dice_loss/WT", "dice_loss/TC", "bce_loss/WT", "bce_loss/TC"):
         assert parts[key] == pytest.approx(clean[key], abs=1e-6)
-    assert parts["bce/ET"] > clean["bce/ET"] + 1
+    assert parts["bce_loss/ET"] > clean["bce_loss/ET"] + 1
 
 
 def test_inverse_frequency_weights_balance_classes():

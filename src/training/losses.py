@@ -34,8 +34,8 @@ class DeepSupervisionDiceBCELoss(nn.Module):
     interpolation, which keeps them binary.
 
     forward() returns (total, breakdown). In the breakdown, the per-region terms
-    (dice/<R>, bce/<R>) and the per-level terms (level/<i>) are weighted
-    contributions: each family sums to the total.
+    (dice_loss/<R>, bce_loss/<R>) and the per-level terms (level_loss/<i>) are
+    weighted loss contributions, not Dice scores: each family sums to the total.
     """
 
     def __init__(self, level_weights=(0.25, 0.5, 1.0), dice_weight=1.0, bce_weight=1.0, smooth=1.0):
@@ -55,7 +55,7 @@ class DeepSupervisionDiceBCELoss(nn.Module):
         n_regions = target.shape[1]
 
         total = target.new_zeros(())
-        breakdown = {f"{kind}/{REGIONS[r]}": 0.0 for kind in ("dice", "bce") for r in range(n_regions)}
+        breakdown = {f"{kind}/{REGIONS[r]}": 0.0 for kind in ("dice_loss", "bce_loss") for r in range(n_regions)}
         for level, (logits, weight) in enumerate(zip(outputs, self.level_weights)):
             logits = logits.float()  # losses in fp32 under mixed precision
             t = target if logits.shape[2:] == target.shape[2:] else F.interpolate(target, size=logits.shape[2:], mode="nearest-exact")
@@ -64,10 +64,10 @@ class DeepSupervisionDiceBCELoss(nn.Module):
             per_region = self.dice_weight * dice + self.bce_weight * bce
             level_loss = weight * per_region.mean()
             total = total + level_loss
-            breakdown[f"level/{level}"] = level_loss.item()
+            breakdown[f"level_loss/{level}"] = level_loss.item()
             for r in range(n_regions):
-                breakdown[f"dice/{REGIONS[r]}"] += (weight * self.dice_weight * dice[r] / n_regions).item()
-                breakdown[f"bce/{REGIONS[r]}"] += (weight * self.bce_weight * bce[r] / n_regions).item()
+                breakdown[f"dice_loss/{REGIONS[r]}"] += (weight * self.dice_weight * dice[r] / n_regions).item()
+                breakdown[f"bce_loss/{REGIONS[r]}"] += (weight * self.bce_weight * bce[r] / n_regions).item()
         breakdown["total"] = total.item()
         return total, breakdown
 

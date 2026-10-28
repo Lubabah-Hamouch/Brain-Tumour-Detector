@@ -1,6 +1,12 @@
-"""Shared helpers for the training scripts: seeding, step timing, GPU memory, wandb."""
+"""Shared helpers for the training scripts: seeding, step timing, GPU memory,
+learning-rate schedule, checkpoints, sleep prevention and wandb."""
+import ctypes
+import math
 import random
+import sys
 import time
+from contextlib import contextmanager
+from pathlib import Path
 
 import numpy as np
 import torch
@@ -61,7 +67,55 @@ def gpu_memory():
     }
 
 
-def init_wandb(cfg, job_type, enabled, name=None, extra_config=None):
+def warmup_cosine(optimizer, warmup_steps, total_steps, min_lr_ratio=0.01):
+    """LambdaLR: linear warmup from 0 to each group's base rate, then cosine decay to min_lr_ratio x base.
+
+    Stepped once per optimizer step. Warmup avoids large early updates while
+    AdamW's moment estimates are still noisy; cosine decay lowers the rate
+    smoothly so the final epochs refine rather than oscillate.
+    """
+    def factor(step):
+        if step < warmup_steps:
+            return (step + 1) / warmup_steps
+        progress = min(1.0, (step - warmup_steps) / max(1, total_steps - warmup_steps))
+        return min_lr_ratio + (1 - min_lr_ratio) * 0.5 * (1 + math.cos(math.pi * progress))
+
+    return torch.optim.lr_scheduler.LambdaLR(optimizer, factor)
+
+
+def save_checkpoint(path, **state):
+    """Write atomically (temporary file, then rename) so an interruption never leaves a corrupt checkpoint."""
+    path = Path(path)
+    path.parent.mkdir(parents=True, exist_ok=True)
+    tmp = path.with_suffix(".tmp")
+    torch.save(state, tmp)
+    tmp.replace(path)
+
+
+def load_checkpoint(path, device="cpu"):
+    return torch.load(path, map_location=device, weights_only=False)
+
+
+@contextmanager
+def keep_awake():
+    """Stop Windows from sleeping on idle while training runs (no effect elsewhere).
+
+    Uses SetThreadExecutionState, which needs no admin rights. It does not
+    override closing the laptop lid if the power plan sleeps on lid close.
+    """
+    if sys.platform != "win32":
+        yield
+        return
+    es_continuous, es_system_required = 0x80000000, 0x00000001
+    ctypes.windll.kernel32.SetThreadExecutionState(es_continuous | es_system_required)
+    try:
+        yield
+    finally:
+        ctypes.windll.kernel32.SetThreadExecutionState(es_continuous)
+
+
+def init_wandb(cfg, job_type, enabled, name=None, extra_config=None, group=None, run_id=None):
+    """Start a wandb run; with run_id, resume that run (used when training resumes from a checkpoint)."""
     if not enabled:
         return None
     import wandb
@@ -70,6 +124,9 @@ def init_wandb(cfg, job_type, enabled, name=None, extra_config=None):
         project=cfg.wandb_project,
         job_type=job_type,
         name=name,
+        group=group,
+        id=run_id,
+        resume="allow" if run_id else None,
         config={**cfg.to_dict(), **(extra_config or {})},
     )
 

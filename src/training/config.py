@@ -72,7 +72,24 @@ class SegmentationTrainConfig(TrainConfig):
     lr: float = 3e-4
     weight_decay: float = 3e-5
     grad_clip: float = 12.0
-    val_fraction: float = 0.2
+    # Linear warmup then cosine decay to 1% of lr, stepped per optimizer step.
+    warmup_epochs: int = 2
+    min_lr_ratio: float = 0.01
+    # One epoch = samples_per_case random patches from every training case.
+    epochs: int = 40
+    samples_per_case: int = 1
+    flip: bool = True
+    num_workers: int = 4
+    # Cross-validation: train on every fold except `fold` (1-based), validate on it.
+    folds_manifest: str = "data/manifests/brats_5fold_splits.json"
+    fold: int = 1
+    # Whole-volume sliding-window validation (128^3 windows, Gaussian blending).
+    val_every: int = 4
+    sw_overlap: float = 0.5
+    sw_batch_size: int = 2
+    # Fixed validation cases drawn as slice overlays at every validation.
+    vis_cases: int = 4
+    checkpoint_dir: str = "models/segmentation"
     wandb_project: str = "brain-tumor-segmentation"
 
 
@@ -91,4 +108,17 @@ class ClassificationTrainConfig(TrainConfig):
     backbone_lr: float = 1e-4
     head_lr: float = 1e-3
     weight_decay: float = 1e-2
+    # Linear warmup (protects the pretrained backbone from the untrained head's
+    # large early gradients) then cosine decay over `epochs`.
+    warmup_epochs: int = 1
+    min_lr_ratio: float = 0.01
+    epochs: int = 30
+    # Stop when validation loss has not improved for `patience` epochs. The
+    # checkpoint kept is the epoch with the best validation macro F1.
+    patience: int = 5
+    augment: bool = True
+    num_workers: int = 6
+    misclassified_every: int = 2
+    misclassified_max: int = 24
+    checkpoint_dir: str = "models/classification"
     wandb_project: str = "brain-tumor-classification"

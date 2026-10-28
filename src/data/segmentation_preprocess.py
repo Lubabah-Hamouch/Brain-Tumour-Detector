@@ -201,15 +201,19 @@ class BratsPatchDataset(Dataset):
     set_epoch() each epoch). Randomness is derived from (seed, epoch, index),
     so DataLoader worker processes, which each receive a copy of the dataset,
     do not draw identical patches.
+    With flip=True each spatial axis is mirrored with probability 0.5 (the
+    mirroring augmentation used by nnU-Net); image and targets flip together.
     Returns (image float32 (C, P, P, P), targets float32 (3, P, P, P)).
     """
 
-    def __init__(self, volume_dir, case_ids, patch_size=128, tumor_ratio=0.75, samples_per_case=1, seed=0):
+    def __init__(self, volume_dir, case_ids, patch_size=128, tumor_ratio=0.75, samples_per_case=1, seed=0,
+                 flip=False):
         self.paths = [Path(volume_dir) / f"{c}.npz" for c in case_ids]
         self.patch_size = patch_size
         self.tumor_ratio = tumor_ratio
         self.samples_per_case = samples_per_case
         self.seed = seed
+        self.flip = flip
         self.epoch = 0
 
     def set_epoch(self, epoch):
@@ -224,8 +228,13 @@ class BratsPatchDataset(Dataset):
             image, targets = data["image"], data["targets"]
         biased = rng.random() < self.tumor_ratio
         (start, _), = patch_starts(targets, 1, 1.0 if biased else 0.0, self.patch_size, rng)
-        return (extract(image, start, self.patch_size).astype(np.float32),
-                extract(targets, start, self.patch_size).astype(np.float32))
+        image = extract(image, start, self.patch_size).astype(np.float32)
+        targets = extract(targets, start, self.patch_size).astype(np.float32)
+        if self.flip:
+            axes = [axis for axis in (1, 2, 3) if rng.random() < 0.5]
+            if axes:
+                image, targets = np.flip(image, axes).copy(), np.flip(targets, axes).copy()
+        return image, targets
 
 
 def save_patch_preview(patch_path, out_path, modalities, n_slices=5):
