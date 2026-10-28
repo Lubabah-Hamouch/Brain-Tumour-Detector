@@ -1,0 +1,9 @@
+{
+  "batch_size": 16,
+  "grad_accum_steps": 1,
+  "mixed_precision": true,
+  "seed": 42,
+  "image_size": 384,
+  "pretrained": true,
+  "freeze_backbone": false
+}

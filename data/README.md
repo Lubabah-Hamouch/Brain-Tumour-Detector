@@ -31,6 +31,17 @@ watermarks, all notumor, 34 images) are dropped; nothing else changes split.
 python -m src.data.make_split data/manifests/figshare_4class_cleaning.json
 ```
 
+## Pretrained weights
+
+The classifier loads torchvision's ImageNet weights for EfficientNetV2-S. On first use they are
+downloaded to the PyTorch cache, outside the repo:
+
+- `%USERPROFILE%\.cache\torch\hub\checkpoints\efficientnet_v2_s-dd5fe13b.pth` (~87 MB)
+- the location follows `torch.hub.get_dir()`; set `TORCH_HOME` to move it
+
+They are not committed and are not part of this directory's data footprint; deleting them only
+means they are downloaded again on the next run.
+
 To recreate:
 
 ```bash

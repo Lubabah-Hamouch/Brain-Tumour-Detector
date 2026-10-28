@@ -1,0 +1,11 @@
+{
+  "batch_size": 1,
+  "grad_accum_steps": 2,
+  "mixed_precision": true,
+  "seed": 42,
+  "patch_size": 128,
+  "tumor_ratio": 0.75,
+  "widths": [32, 64, 128, 256],
+  "bottleneck": 320,
+  "deep_supervision": 2
+}
