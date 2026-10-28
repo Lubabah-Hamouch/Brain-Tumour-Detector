@@ -13,6 +13,7 @@ matplotlib>=3.8
 
 kaggle>=2.0
 python-dotenv>=1.0
-wandb>=0.19
+# 0.31+ accepts the current "wandb_v1_..." API key format (older releases require exactly 40 chars)
+wandb>=0.31
 
 pytest>=8.0
