@@ -1,0 +1,57 @@
+# Secrets and credentials
+.env
+.env.*
+!.env.example
+*.pem
+*.key
+*.p12
+*.pfx
+*.crt
+secrets.*
+credentials.*
+*credentials*.json
+kaggle.json
+.kaggle/
+id_rsa*
+id_ed25519*
+
+# Python
+__pycache__/
+*.py[cod]
+.venv/
+venv/
+env/
+.ipynb_checkpoints/
+
+# Editor / OS
+.vscode/
+.idea/
+.DS_Store
+Thumbs.db
+
+# Data (never committed; see data/README.md)
+data/raw/*
+data/processed/*
+!data/raw/.gitkeep
+!data/processed/.gitkeep
+*.nii
+*.nii.gz
+*.mat
+*.tar
+*.zip
+*.kaggle-partial
+
+# Model weights
+models/*
+!models/.gitkeep
+*.pt
+*.pth
+*.ckpt
+*.onnx
+*.h5
+*.keras
+
+# Generated reports and figures
+reports/*
+!reports/.gitkeep
+figure*.png
