@@ -144,3 +144,20 @@ def test_mcnemar_exact():
     assert mcnemar_exact(0, 5) == pytest.approx(2 / 32)
     assert mcnemar_exact(3, 3) == 1.0 and mcnemar_exact(0, 0) == 1.0
     assert mcnemar_exact(1, 9) == pytest.approx(2 * (1 + 10) / 1024)
+
+
+def test_resolution_degrade_downscales_and_reencodes():
+    from PIL import Image
+
+    from src.training.train_classification import RandomResolutionDegrade
+
+    torch.manual_seed(0)
+    img = Image.fromarray((np.random.default_rng(0).random((512, 400)) * 255).astype(np.uint8))
+    always = RandomResolutionDegrade(p=1.0, min_side=(150, 320), quality=(30, 95))
+    for _ in range(50):
+        out = always(img)
+        assert out.mode == "L" and 150 <= min(out.size) <= 320
+        assert abs(out.width / out.height - 400 / 512) < 0.02  # aspect ratio kept
+    small = Image.new("L", (100, 120))
+    assert always(small).size == (100, 120)  # never enlarged
+    assert RandomResolutionDegrade(p=0.0)(img) is img

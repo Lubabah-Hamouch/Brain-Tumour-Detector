@@ -1,0 +1,406 @@
+{
+ "baseline": "classification_test_crop.json",
+ "candidate": "classification_test_crop_resdegrade.json",
+ "metrics": {
+  "classification_test_crop.json": {
+   "loss": 0.05048754264046507,
+   "accuracy": 0.9816779170684667,
+   "macro_f1": 0.981547711665427,
+   "precision/glioma": 0.9962264150943396,
+   "recall/glioma": 0.9777777777777777,
+   "f1/glioma": 0.9869158878504672,
+   "precision/meningioma": 0.9670781893004116,
+   "recall/meningioma": 0.9873949579831933,
+   "f1/meningioma": 0.9771309771309771,
+   "precision/notumor": 0.9960159362549801,
+   "recall/notumor": 0.9652509652509652,
+   "f1/notumor": 0.9803921568627452,
+   "precision/pituitary": 0.9676258992805755,
+   "recall/pituitary": 0.9962962962962963,
+   "f1/pituitary": 0.9817518248175183
+  },
+  "classification_test_crop_resdegrade.json": {
+   "loss": 0.0808009167161095,
+   "accuracy": 0.9778206364513018,
+   "macro_f1": 0.9777243212753968,
+   "precision/glioma": 0.9632352941176471,
+   "recall/glioma": 0.9703703703703703,
+   "f1/glioma": 0.9667896678966789,
+   "precision/meningioma": 0.9787234042553191,
+   "recall/meningioma": 0.9663865546218487,
+   "f1/meningioma": 0.9725158562367864,
+   "precision/notumor": 0.9921568627450981,
+   "recall/notumor": 0.9768339768339769,
+   "f1/notumor": 0.9844357976653697,
+   "precision/pituitary": 0.9781818181818182,
+   "recall/pituitary": 0.9962962962962963,
+   "f1/pituitary": 0.9871559633027523
+  }
+ },
+ "checkpoint_epochs": {
+  "classification_test_crop.json": 9,
+  "classification_test_crop_resdegrade.json": 10
+ },
+ "format_breakdown": {
+  "classification_test_crop.json": {
+   "glioma/512x512": {
+    "images": 261,
+    "errors": 3,
+    "error_rate": 0.011494252873563218
+   },
+   "glioma/other": {
+    "images": 9,
+    "errors": 3,
+    "error_rate": 0.3333333333333333
+   },
+   "meningioma/512x512": {
+    "images": 233,
+    "errors": 3,
+    "error_rate": 0.012875536480686695
+   },
+   "meningioma/other": {
+    "images": 5,
+    "errors": 0,
+    "error_rate": 0.0
+   },
+   "notumor/512x512": {
+    "images": 2,
+    "errors": 0,
+    "error_rate": 0.0
+   },
+   "notumor/other": {
+    "images": 257,
+    "errors": 9,
+    "error_rate": 0.03501945525291829
+   },
+   "pituitary/512x512": {
+    "images": 264,
+    "errors": 1,
+    "error_rate": 0.003787878787878788
+   },
+   "pituitary/other": {
+    "images": 6,
+    "errors": 0,
+    "error_rate": 0.0
+   }
+  },
+  "classification_test_crop_resdegrade.json": {
+   "glioma/512x512": {
+    "images": 261,
+    "errors": 4,
+    "error_rate": 0.01532567049808429
+   },
+   "glioma/other": {
+    "images": 9,
+    "errors": 4,
+    "error_rate": 0.4444444444444444
+   },
+   "meningioma/512x512": {
+    "images": 233,
+    "errors": 8,
+    "error_rate": 0.034334763948497854
+   },
+   "meningioma/other": {
+    "images": 5,
+    "errors": 0,
+    "error_rate": 0.0
+   },
+   "notumor/512x512": {
+    "images": 2,
+    "errors": 0,
+    "error_rate": 0.0
+   },
+   "notumor/other": {
+    "images": 257,
+    "errors": 6,
+    "error_rate": 0.023346303501945526
+   },
+   "pituitary/512x512": {
+    "images": 264,
+    "errors": 1,
+    "error_rate": 0.003787878787878788
+   },
+   "pituitary/other": {
+    "images": 6,
+    "errors": 0,
+    "error_rate": 0.0
+   }
+  }
+ },
+ "tracked_errors": {
+  "Te-gl_350.jpg": {
+   "baseline": "correct",
+   "candidate": "meningioma",
+   "size": [
+    175,
+    167
+   ]
+  },
+  "Te-gl_97.jpg": {
+   "baseline": "meningioma",
+   "candidate": "notumor",
+   "size": [
+    504,
+    608
+   ]
+  },
+  "Te-gl_318.jpg": {
+   "baseline": "meningioma",
+   "candidate": "notumor",
+   "size": [
+    197,
+    229
+   ]
+  }
+ },
+ "fixed_by_candidate": [
+  {
+   "file": "Te-gl_18.jpg",
+   "true": "glioma",
+   "baseline_predicted": "meningioma",
+   "size": [
+    512,
+    512
+   ]
+  },
+  {
+   "file": "Te-gl_257.jpg",
+   "true": "glioma",
+   "baseline_predicted": "meningioma",
+   "size": [
+    512,
+    512
+   ]
+  },
+  {
+   "file": "Te-gl_77.jpg",
+   "true": "glioma",
+   "baseline_predicted": "meningioma",
+   "size": [
+    512,
+    512
+   ]
+  },
+  {
+   "file": "Tr-me_850.jpg",
+   "true": "meningioma",
+   "baseline_predicted": "pituitary",
+   "size": [
+    512,
+    512
+   ]
+  },
+  {
+   "file": "Tr-no_383.jpg",
+   "true": "notumor",
+   "baseline_predicted": "meningioma",
+   "size": [
+    236,
+    268
+   ]
+  },
+  {
+   "file": "Tr-no_539.jpg",
+   "true": "notumor",
+   "baseline_predicted": "pituitary",
+   "size": [
+    212,
+    236
+   ]
+  },
+  {
+   "file": "Tr-no_543.jpg",
+   "true": "notumor",
+   "baseline_predicted": "pituitary",
+   "size": [
+    212,
+    236
+   ]
+  },
+  {
+   "file": "Tr-no_59.jpg",
+   "true": "notumor",
+   "baseline_predicted": "meningioma",
+   "size": [
+    225,
+    225
+   ]
+  },
+  {
+   "file": "Tr-no_674.jpg",
+   "true": "notumor",
+   "baseline_predicted": "pituitary",
+   "size": [
+    211,
+    236
+   ]
+  },
+  {
+   "file": "Tr-pi_322.jpg",
+   "true": "pituitary",
+   "baseline_predicted": "notumor",
+   "size": [
+    512,
+    512
+   ]
+  }
+ ],
+ "new_in_candidate": [
+  {
+   "file": "Te-gl_350.jpg",
+   "true": "glioma",
+   "predicted": "meningioma",
+   "confidence": 0.9849,
+   "size": [
+    175,
+    167
+   ]
+  },
+  {
+   "file": "Te-me_188.jpg",
+   "true": "meningioma",
+   "predicted": "glioma",
+   "confidence": 0.8313,
+   "size": [
+    512,
+    512
+   ]
+  },
+  {
+   "file": "Te-me_209.jpg",
+   "true": "meningioma",
+   "predicted": "pituitary",
+   "confidence": 0.9877,
+   "size": [
+    512,
+    512
+   ]
+  },
+  {
+   "file": "Te-pi_134.jpg",
+   "true": "pituitary",
+   "predicted": "glioma",
+   "confidence": 0.9252,
+   "size": [
+    512,
+    512
+   ]
+  },
+  {
+   "file": "Tr-gl_1321.jpg",
+   "true": "glioma",
+   "predicted": "meningioma",
+   "confidence": 0.6939,
+   "size": [
+    512,
+    512
+   ]
+  },
+  {
+   "file": "Tr-gl_1354.jpg",
+   "true": "glioma",
+   "predicted": "pituitary",
+   "confidence": 0.5299,
+   "size": [
+    512,
+    512
+   ]
+  },
+  {
+   "file": "Tr-gl_504.jpg",
+   "true": "glioma",
+   "predicted": "meningioma",
+   "confidence": 0.654,
+   "size": [
+    512,
+    512
+   ]
+  },
+  {
+   "file": "Tr-gl_669.jpg",
+   "true": "glioma",
+   "predicted": "meningioma",
+   "confidence": 0.3345,
+   "size": [
+    512,
+    512
+   ]
+  },
+  {
+   "file": "Tr-me_1065.jpg",
+   "true": "meningioma",
+   "predicted": "glioma",
+   "confidence": 0.9744,
+   "size": [
+    512,
+    512
+   ]
+  },
+  {
+   "file": "Tr-me_623.jpg",
+   "true": "meningioma",
+   "predicted": "glioma",
+   "confidence": 0.9754,
+   "size": [
+    512,
+    512
+   ]
+  },
+  {
+   "file": "Tr-me_882.jpg",
+   "true": "meningioma",
+   "predicted": "glioma",
+   "confidence": 0.947,
+   "size": [
+    512,
+    512
+   ]
+  },
+  {
+   "file": "Tr-me_901.jpg",
+   "true": "meningioma",
+   "predicted": "glioma",
+   "confidence": 0.8139,
+   "size": [
+    512,
+    512
+   ]
+  },
+  {
+   "file": "Tr-no_144.jpg",
+   "true": "notumor",
+   "predicted": "glioma",
+   "confidence": 0.9228,
+   "size": [
+    235,
+    227
+   ]
+  },
+  {
+   "file": "Tr-no_602.jpg",
+   "true": "notumor",
+   "predicted": "glioma",
+   "confidence": 0.7473,
+   "size": [
+    225,
+    225
+   ]
+  }
+ ],
+ "both_wrong": [
+  "Te-gl_106.jpg",
+  "Te-gl_318.jpg",
+  "Te-gl_97.jpg",
+  "Tr-me_1203.jpg",
+  "Tr-me_964.jpg",
+  "Tr-no_173.jpg",
+  "Tr-no_261.jpg",
+  "Tr-no_344.jpg",
+  "Tr-no_777.jpg"
+ ],
+ "mcnemar_exact": {
+  "baseline_only_wrong": 10,
+  "candidate_only_wrong": 14,
+  "p_value": 0.5412561893463135
+ }
+}

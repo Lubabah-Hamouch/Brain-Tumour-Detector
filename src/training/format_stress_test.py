@@ -12,6 +12,9 @@ Conditions (applied to every test image, all classes):
     original        unchanged
     small_square    resized to 225 x 225, the most common no-tumour training size
     small_portrait  resized to 210 x 234, a common non-square no-tumour size
+    tiny_square     resized to 128 x 128, smaller than any size seen by the
+                    resolution-degradation augmentation (shorter side 150-320),
+                    so it also tests robustness outside the trained range
 
 Writes reports/results/format_stress_test.json.
 
@@ -33,7 +36,7 @@ from src.models.classifier import EfficientNetV2Classifier
 from src.training.evaluate_segmentation import RESULTS_DIR
 from src.training.utils import load_checkpoint
 
-CONDITIONS = {"original": None, "small_square": (225, 225), "small_portrait": (210, 234)}
+CONDITIONS = {"original": None, "small_square": (225, 225), "small_portrait": (210, 234), "tiny_square": (128, 128)}
 NO_TUMOUR = CLASSES.index("notumor")
 
 

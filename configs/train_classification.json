@@ -21,6 +21,10 @@
   "random_crop": false,
   "crop_scale": [0.7, 1.0],
   "crop_ratio": [0.75, 1.3333],
+  "resolution_degrade": false,
+  "degrade_prob": 0.5,
+  "degrade_min_side": [150, 320],
+  "jpeg_quality": [30, 95],
   "misclassified_every": 2,
   "misclassified_max": 24,
   "checkpoint_dir": "models/classification"

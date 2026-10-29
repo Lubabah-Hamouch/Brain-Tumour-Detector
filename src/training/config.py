@@ -47,7 +47,7 @@ class TrainConfig:
         unknown = set(values) - known
         if unknown:
             raise ValueError(f"Unknown {cls.__name__} keys: {sorted(unknown)}")
-        for key in ("widths", "level_weights", "crop_scale", "crop_ratio"):
+        for key in ("widths", "level_weights", "crop_scale", "crop_ratio", "degrade_min_side", "jpeg_quality"):
             if key in values:
                 values[key] = tuple(values[key])
         return cls(**values)
@@ -128,6 +128,16 @@ class ClassificationTrainConfig(TrainConfig):
     random_crop: bool = False
     crop_scale: tuple = (0.7, 1.0)
     crop_ratio: tuple = (0.75, 1.3333)
+    # Random resolution and compression degradation of the original image
+    # (after the crop, before letterboxing): with probability degrade_prob,
+    # downscale so the shorter side is in degrade_min_side, then re-encode as
+    # JPEG at a quality in jpeg_quality. Mimics the small, re-encoded files of
+    # the no-tumour source so resolution stops predicting the class. Enabled in
+    # train_classification_crop_resdegrade.json.
+    resolution_degrade: bool = False
+    degrade_prob: float = 0.5
+    degrade_min_side: tuple = (150, 320)
+    jpeg_quality: tuple = (30, 95)
     num_workers: int = 6
     misclassified_every: int = 2
     misclassified_max: int = 24

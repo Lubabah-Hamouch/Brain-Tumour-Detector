@@ -19,11 +19,13 @@ Usage:
     python -m src.training.train_classification --max-train 96 --max-val 48 --epochs 2   # smoke test
 """
 import argparse
+import io
 import time
 from pathlib import Path
 
 import numpy as np
 import torch
+from PIL import Image
 from torch.utils.data import DataLoader, Subset
 from torchvision import transforms
 
@@ -68,6 +70,35 @@ class RandomAreaCrop:
     def __call__(self, img):
         top, left, height, width = transforms.RandomResizedCrop.get_params(img, self.scale, self.ratio)
         return img.crop((left, top, left + width, top + height))
+
+
+class RandomResolutionDegrade:
+    """With probability p, downscale the image and re-encode it as JPEG.
+
+    The shorter side is reduced to a random size in `min_side` (aspect ratio
+    kept; images already smaller are not enlarged) and the result is saved and
+    reloaded as JPEG at a random quality in `quality`. Letterboxing then
+    upsamples it, reproducing the blur and compression artefacts of the small
+    no-tumour source files on images of every class.
+    """
+
+    def __init__(self, p=0.5, min_side=(150, 320), quality=(30, 95)):
+        self.p = p
+        self.min_side = tuple(min_side)
+        self.quality = tuple(quality)
+
+    def __call__(self, img):
+        if torch.rand(1).item() >= self.p:
+            return img
+        target = int(torch.randint(self.min_side[0], self.min_side[1] + 1, (1,)))
+        scale = target / min(img.size)
+        if scale < 1:
+            img = img.resize((max(1, round(img.width * scale)), max(1, round(img.height * scale))), Image.BICUBIC)
+        buffer = io.BytesIO()
+        img.save(buffer, format="JPEG", quality=int(torch.randint(self.quality[0], self.quality[1] + 1, (1,))))
+        buffer.seek(0)
+        with Image.open(buffer) as degraded:
+            return degraded.convert("L")
 
 
 def subset(dataset, n, seed):
@@ -141,7 +172,11 @@ def train(cfg, max_train=0, max_val=0, use_wandb=True, run_name=None):
     device = torch.device("cuda")
 
     augment = train_augmentation() if cfg.augment else None
-    crop = RandomAreaCrop(cfg.crop_scale, cfg.crop_ratio) if cfg.random_crop else None
+    # Transforms of the original image, applied before letterboxing (training only).
+    before_letterbox = [t for t in (RandomAreaCrop(cfg.crop_scale, cfg.crop_ratio) if cfg.random_crop else None,
+                                    RandomResolutionDegrade(cfg.degrade_prob, cfg.degrade_min_side, cfg.jpeg_quality)
+                                    if cfg.resolution_degrade else None) if t is not None]
+    crop = transforms.Compose(before_letterbox) if before_letterbox else None
     full_train = BrainMRIClassificationDataset("train", image_size=cfg.image_size, augment=augment, crop=crop)
     # Class weights always come from the full training split, not a smoke-test subset.
     class_counts = list(full_train.class_counts().values())
