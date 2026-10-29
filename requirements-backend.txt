@@ -1,0 +1,9 @@
+# API server for the trained models (see backend/README.md); installs the core requirements too.
+-r requirements.txt
+
+fastapi>=0.115
+uvicorn>=0.30
+# multipart/form-data file uploads
+python-multipart>=0.0.9
+# FastAPI's TestClient, used by tests/test_api.py
+httpx>=0.27

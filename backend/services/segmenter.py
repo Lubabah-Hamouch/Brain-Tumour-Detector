@@ -1,0 +1,226 @@
+"""Brain tumour segmentation of a BraTS-style multimodal MRI study with the 5-fold U-Net ensemble.
+
+Every step is the evaluation pipeline (src.training.evaluate_segmentation), imported rather
+than reimplemented:
+    load_modality / preprocess_image  (src.data.segmentation_preprocess): z-score inside the
+        brain mask, crop to the brain, pad to the patch size - the training preprocessing
+    load_models / predict              (src.training.evaluate_segmentation): fold checkpoints and
+        Gaussian-weighted sliding-window inference with 128^3 windows
+    mean of the fold probabilities, threshold 0.5, then ET small-component removal
+        (src.training.postprocess) with the threshold tuned on out-of-fold validation data
+The region masks are combined into a BraTS label map (1 necrotic core, 2 edema, 4 enhancing)
+and placed back into the uploaded volume's grid (uncrop), so the returned NIfTI overlays the
+input directly.
+"""
+import base64
+import gzip
+import tempfile
+import threading
+import time
+import uuid
+from collections import OrderedDict
+from pathlib import Path
+
+import nibabel as nib
+import numpy as np
+import torch
+
+from backend.services.errors import ApiError, relative_name
+from backend.services.imaging import label_overlay, png_base64
+from src.data.segmentation_preprocess import ALL_MODALITIES, load_modality, preprocess_image, uncrop
+from src.training.evaluate_segmentation import load_models, predict
+from src.training.inference import dice_scores
+from src.training.losses import REGIONS
+from src.training.postprocess import components, remove_small_components
+
+ET = REGIONS.index("ET")
+BRATS_LABELS = {"necrotic_core": 1, "edema": 2, "enhancing_tumour": 4}
+NIFTI_SUFFIXES = (".nii", ".nii.gz")
+EXPECTED_SPACING_MM = 1.0
+
+
+def nested_to_brats(regions):
+    """(3, ...) binary WT/TC/ET -> BraTS label map: 4 where ET, else 1 where TC, else 2 where WT."""
+    wt, tc, et = (regions[i].astype(bool) for i in range(3))
+    return np.select([et, tc, wt], [4, 1, 2], 0).astype(np.uint8)
+
+
+def brats_regions(labels):
+    """BraTS label map -> {region: bool mask}, the inverse used for volumes and statistics."""
+    return {"WT": labels > 0, "TC": np.isin(labels, (1, 4)), "ET": labels == 4}
+
+
+class ResultCache:
+    """The most recent label maps (gzipped NIfTI bytes), kept in memory for download."""
+
+    def __init__(self, size):
+        self.size = size
+        self._items = OrderedDict()
+        self._lock = threading.Lock()
+
+    def put(self, data):
+        key = uuid.uuid4().hex
+        with self._lock:
+            self._items[key] = data
+            while len(self._items) > self.size:
+                self._items.popitem(last=False)
+        return key
+
+    def get(self, key):
+        with self._lock:
+            return self._items.get(key)
+
+
+def read_nifti(name, data, max_mb):
+    """Uploaded bytes -> (float32 volume, nibabel image). Raises ApiError with a precise reason."""
+    if not name or not name.lower().endswith(NIFTI_SUFFIXES):
+        raise ApiError(415, "unsupported_file_type", f"'{name}' is not a NIfTI file; expected .nii or .nii.gz.")
+    if len(data) == 0:
+        raise ApiError(422, "empty_file", f"'{name}' is empty.")
+    if len(data) > max_mb * 2**20:
+        raise ApiError(413, "file_too_large", f"'{name}' is {len(data) / 2**20:.0f} MB; the limit is {max_mb:.0f} MB.")
+    suffix = ".nii.gz" if name.lower().endswith(".gz") else ".nii"
+    with tempfile.TemporaryDirectory() as tmp:
+        path = Path(tmp) / f"upload{suffix}"
+        path.write_bytes(data)
+        try:
+            img = nib.load(path)
+            volume = load_modality(path)
+        except Exception as exc:  # nibabel raises many types for truncated or invalid files
+            raise ApiError(422, "corrupt_nifti", f"'{name}' could not be read as NIfTI ({type(exc).__name__}: {exc}).") from exc
+    if volume.ndim == 4 and volume.shape[-1] == 1:
+        volume = volume[..., 0]
+    if volume.ndim != 3:
+        raise ApiError(422, "not_3d", f"'{name}' has shape {list(volume.shape)}; each modality must be one 3D volume.")
+    if not np.isfinite(volume).all():
+        raise ApiError(422, "non_finite_values", f"'{name}' contains NaN or infinite values.")
+    return volume, img
+
+
+class SegmenterService:
+    def __init__(self, checkpoint_dir, folds, device, et_min_voxels, cache_size, max_volume_mb):
+        self.device = device
+        self.models, self.cv_scores, self.cfg = load_models(checkpoint_dir, folds, device)
+        self.cfg = dict(self.cfg, mixed_precision=self.cfg["mixed_precision"] and device.type == "cuda")
+        self.et_min_voxels = et_min_voxels
+        self.max_volume_mb = max_volume_mb
+        self.cache = ResultCache(cache_size)
+        self.checkpoint_dir = relative_name(Path(checkpoint_dir))
+        self._lock = threading.Lock()  # one volume at a time on the GPU
+
+    def load_study(self, files):
+        """files: {modality: (filename, bytes)} -> (image (4, X, Y, Z), reference nibabel image, warnings)."""
+        volumes, images, warnings = {}, {}, []
+        for modality in ALL_MODALITIES:
+            name, data = files[modality]
+            volumes[modality], images[modality] = read_nifti(name, data, self.max_volume_mb)
+
+        shapes = {m: list(v.shape) for m, v in volumes.items()}
+        if len({tuple(s) for s in shapes.values()}) != 1:
+            raise ApiError(422, "shape_mismatch", f"All four modalities must have the same voxel grid; got {shapes}. "
+                                                  "They must be co-registered to one grid, as in BraTS.")
+        zooms = {m: [round(float(z), 4) for z in img.header.get_zooms()[:3]] for m, img in images.items()}
+        if any(not np.allclose(z, zooms["flair"], atol=1e-3) for z in zooms.values()):
+            raise ApiError(422, "spacing_mismatch", f"All four modalities must have the same voxel spacing; got {zooms}.")
+        ref = images["flair"]
+        if any(not np.allclose(img.affine, ref.affine, atol=1e-3) for img in images.values()):
+            warnings.append("The modalities' affines differ although their grids match; check that they are co-registered.")
+        if any(abs(z - EXPECTED_SPACING_MM) > 0.1 for z in zooms["flair"]):
+            warnings.append(f"Voxel spacing is {zooms['flair']} mm; the model was trained on 1 mm isotropic BraTS data "
+                            "and accuracy may drop at other resolutions.")
+        image = np.stack([volumes[m] for m in ALL_MODALITIES])
+        if not np.any(image != 0, axis=0).any():
+            raise ApiError(422, "empty_volume", "All four volumes are zero everywhere.")
+        brain_fraction = float(np.any(image != 0, axis=0).mean())
+        if brain_fraction > 0.5:
+            warnings.append(f"{brain_fraction:.0%} of voxels are non-zero; the volumes look as if they are not "
+                            "skull-stripped. The model expects skull-stripped BraTS-style input.")
+        return image, ref, warnings
+
+    def segment(self, files, inline_mask=False, base_url=""):
+        t0 = time.perf_counter()
+        image, ref, warnings = self.load_study(files)
+        shape = list(image.shape[1:])
+        spacing = [float(z) for z in ref.header.get_zooms()[:3]]
+        t1 = time.perf_counter()
+
+        x, box = preprocess_image(image, self.cfg["patch_size"])
+        x_t = torch.from_numpy(x).to(self.device)
+        t2 = time.perf_counter()
+
+        with self._lock:
+            total, fold_masks = None, []
+            for model in self.models.values():
+                probs = predict(model, x_t, self.cfg)
+                total = probs if total is None else total + probs
+                fold_masks.append(probs > 0.5)
+            ensemble = total / len(self.models)
+            masks = ensemble > 0.5
+            agreement = np.mean([dice_scores(m, masks) for m in fold_masks], axis=0)
+            ensemble_np = ensemble.cpu().numpy()
+            masks_np = masks.cpu().numpy()
+            del x_t, total, fold_masks, ensemble, masks
+        t3 = time.perf_counter()
+
+        et_raw = masks_np[ET]
+        _, et_sizes = components(et_raw)
+        masks_np[ET] = remove_small_components(et_raw, self.et_min_voxels)
+        labels_crop = nested_to_brats(masks_np)
+        regions = brats_regions(labels_crop)
+        voxel_ml = float(np.prod(spacing)) / 1000.0
+        region_results = {}
+        for i, r in enumerate(REGIONS):
+            n = int(regions[r].sum())
+            region_results[r] = {"voxels": n, "volume_ml": round(n * voxel_ml, 3),
+                                 "mean_probability": round(float(ensemble_np[i][regions[r]].mean()), 4) if n else None,
+                                 "model_agreement": round(float(agreement[i]), 4)}
+
+        labels = uncrop(labels_crop, box, shape)
+        nifti = nib.Nifti1Image(labels, ref.affine)
+        nifti.header.set_xyzt_units("mm")
+        mask_bytes = gzip.compress(nifti.to_bytes(), compresslevel=6)
+        result_id = self.cache.put(mask_bytes)
+        t4 = time.perf_counter()
+
+        return {
+            "result_id": result_id,
+            "mask_url": f"{base_url}/api/segment/{result_id}/mask.nii.gz",
+            "mask_nifti_base64": base64.b64encode(mask_bytes).decode("ascii") if inline_mask else None,
+            "labels": BRATS_LABELS,
+            "regions": region_results,
+            "shape": shape,
+            "spacing_mm": spacing,
+            "tumour_bbox": self._bbox(labels > 0),
+            "preview": self._previews(image[ALL_MODALITIES.index("flair")], labels),
+            "post_processing": {"et_min_component_voxels": self.et_min_voxels,
+                                "et_components_predicted": int(len(et_sizes)),
+                                "et_components_removed": int((et_sizes < self.et_min_voxels).sum()),
+                                "et_voxels_removed": int(et_sizes[et_sizes < self.et_min_voxels].sum())},
+            "model": {"checkpoint_dir": self.checkpoint_dir, "folds": list(self.models),
+                      "cross_validation_mean_dice": {f"fold{k}": round(v, 4) for k, v in self.cv_scores.items()},
+                      "patch_size": self.cfg["patch_size"], "sliding_window_overlap": self.cfg["sw_overlap"]},
+            "timing_seconds": {"load": round(t1 - t0, 2), "preprocess": round(t2 - t1, 2),
+                               "inference": round(t3 - t2, 2), "postprocess_and_encode": round(t4 - t3, 2)},
+            "warnings": warnings,
+        }
+
+    @staticmethod
+    def _bbox(mask):
+        if not mask.any():
+            return None
+        idx = np.nonzero(mask)
+        return {"min": [int(i.min()) for i in idx], "max": [int(i.max()) for i in idx]}
+
+    @staticmethod
+    def _previews(flair, labels):
+        """Axial, coronal and sagittal slices through the largest tumour cross-section (or the volume centre)."""
+        tumour = labels > 0
+        out = []
+        for plane, axis in (("axial", 2), ("coronal", 1), ("sagittal", 0)):
+            other = tuple(a for a in range(3) if a != axis)
+            index = int(tumour.sum(axis=other).argmax()) if tumour.any() else flair.shape[axis] // 2
+            take = [slice(None)] * 3
+            take[axis] = index
+            out.append({"plane": plane, "index": index,
+                        "png": png_base64(label_overlay(flair[tuple(take)], labels[tuple(take)]))})
+        return out

@@ -64,13 +64,15 @@ class PreprocessConfig:
             self.output = str(PROCESSED_DIR / name)
 
 
+def load_modality(path):
+    """One NIfTI volume as float32 (X, Y, Z) in native orientation (header scaling applied)."""
+    return np.asarray(nib.load(path).dataobj, dtype=np.float32)
+
+
 def load_case(case_dir, modalities=ALL_MODALITIES):
     """Return image (C, X, Y, Z) float32 and label map (X, Y, Z) uint8 in native orientation."""
     case_dir = Path(case_dir)
-    image = np.stack([
-        np.asarray(nib.load(case_dir / f"{case_dir.name}_{m}.nii.gz").dataobj, dtype=np.float32)
-        for m in modalities
-    ])
+    image = np.stack([load_modality(case_dir / f"{case_dir.name}_{m}.nii.gz") for m in modalities])
     seg = np.asarray(nib.load(case_dir / f"{case_dir.name}_seg.nii.gz").dataobj).astype(np.uint8)
     return image, seg
 
@@ -94,15 +96,46 @@ def region_targets(seg):
     return np.stack([np.isin(seg, REGION_LABELS[r]) for r in REGIONS]).astype(np.uint8)
 
 
-def crop_to_mask(image, targets, mask, min_size):
-    """Crop to the mask bounding box, then zero-pad each axis up to min_size."""
+def crop_box(mask, min_size):
+    """Geometry of crop_to_mask: (lo, hi, pad) with pad[i] = (before, after) zero padding per axis."""
     idx = np.nonzero(mask)
     lo = [int(i.min()) for i in idx]
     hi = [int(i.max()) + 1 for i in idx]
+    pad = [((max(min_size - (b - a), 0)) // 2, (max(min_size - (b - a), 0) + 1) // 2) for a, b in zip(lo, hi)]
+    return lo, hi, pad
+
+
+def crop_to_mask(image, targets, mask, min_size):
+    """Crop to the mask bounding box, then zero-pad each axis up to min_size."""
+    lo, hi, pad = crop_box(mask, min_size)
     sl = tuple(slice(a, b) for a, b in zip(lo, hi))
     image, targets = image[(slice(None), *sl)], targets[(slice(None), *sl)]
-    pad = [(0, 0)] + [((max(min_size - s, 0)) // 2, (max(min_size - s, 0) + 1) // 2) for s in image.shape[1:]]
-    return np.pad(image, pad), np.pad(targets, pad), lo
+    return np.pad(image, [(0, 0)] + pad), np.pad(targets, [(0, 0)] + pad), lo
+
+
+def preprocess_image(image, patch_size=128):
+    """Inference-time preprocessing of (C, X, Y, Z) modalities, identical to training.
+
+    Brain mask, z-score inside it, crop to the brain and pad to patch_size.
+    Returns (image, box) where box = crop_box(...) maps predictions back with uncrop().
+    """
+    mask = brain_mask(image)
+    if not mask.any():
+        raise ValueError("volume is empty: no non-zero voxels in any modality")
+    image = zscore_in_mask(image, mask)
+    box = crop_box(mask, patch_size)
+    lo, hi, pad = box
+    sl = tuple(slice(a, b) for a, b in zip(lo, hi))
+    return np.pad(image[(slice(None), *sl)], [(0, 0)] + pad), box
+
+
+def uncrop(array, box, shape):
+    """Inverse of the crop and pad: place (..., X', Y', Z') back into a zero array of spatial `shape`."""
+    lo, hi, pad = box
+    inner = tuple(slice(before, before + (b - a)) for (before, _), a, b in zip(pad, lo, hi))
+    out = np.zeros((*array.shape[:-3], *shape), dtype=array.dtype)
+    out[(..., *(slice(a, b) for a, b in zip(lo, hi)))] = array[(..., *inner)]
+    return out
 
 
 def preprocess_case(case_dir, modalities=ALL_MODALITIES, patch_size=128):

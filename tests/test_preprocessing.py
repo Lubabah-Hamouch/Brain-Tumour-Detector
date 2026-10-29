@@ -99,3 +99,20 @@ def test_colour_spread_flags_coloured_overlays_only(tmp_path):
     assert colour_spread(tmp_path / "gray.png") == 0
     assert colour_spread(tmp_path / "l.png") == 0
     assert colour_spread(tmp_path / "tinted.png") > 30
+
+
+def test_preprocess_image_matches_training_preprocessing_and_uncrop_inverts_it():
+    from src.data.segmentation_preprocess import (brain_mask, crop_to_mask, preprocess_image, uncrop,
+                                                  zscore_in_mask)
+
+    rng = np.random.default_rng(0)
+    image = np.zeros((4, 60, 50, 40), dtype=np.float32)
+    image[:, 10:40, 5:45, 8:30] = rng.normal(5, 2, size=(4, 30, 40, 22))
+    x, box = preprocess_image(image, patch_size=48)
+    mask = brain_mask(image)
+    targets = np.zeros((3, *image.shape[1:]), dtype=np.uint8)
+    targets[:, 20:25, 10:15, 10:12] = 1
+    ref, ref_targets, offset = crop_to_mask(zscore_in_mask(image, mask), targets, mask, 48)
+    assert np.array_equal(x, ref) and box[0] == offset
+    assert all(s >= 48 for s in x.shape[1:])
+    assert np.array_equal(uncrop(ref_targets, box, image.shape[1:]), targets)
