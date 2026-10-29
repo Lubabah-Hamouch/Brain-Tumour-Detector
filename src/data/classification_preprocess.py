@@ -74,13 +74,18 @@ class BrainMRIClassificationDataset(Dataset):
 
     `augment` is an optional callable applied to the letterboxed grayscale PIL
     image before tensor conversion (training-time augmentation only).
+    `crop` is an optional callable applied to the original grayscale image
+    before letterboxing (training only), e.g. RandomAreaCrop: it changes the
+    size and aspect ratio the letterbox sees, which augmentation after
+    letterboxing cannot do.
     """
 
-    def __init__(self, split, root=CLEAN_DIR, image_size=IMAGE_SIZE, augment=None):
+    def __init__(self, split, root=CLEAN_DIR, image_size=IMAGE_SIZE, augment=None, crop=None):
         self.root = Path(root)
         self.split = split
         self.image_size = image_size
         self.augment = augment
+        self.crop = crop
         self.class_to_idx = {c: i for i, c in enumerate(CLASSES)}
         self.samples = [
             (p, self.class_to_idx[c])
@@ -100,7 +105,12 @@ class BrainMRIClassificationDataset(Dataset):
             return letterbox(to_grayscale(img), self.image_size)
 
     def __getitem__(self, index):
-        img = self.load_image(index)
+        if self.crop is None:
+            img = self.load_image(index)
+        else:
+            path, _ = self.samples[index]
+            with Image.open(path) as raw:
+                img = letterbox(self.crop(to_grayscale(raw)), self.image_size)
         if self.augment is not None:
             img = self.augment(img)
         return to_tensor(img), self.samples[index][1]

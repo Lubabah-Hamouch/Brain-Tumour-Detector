@@ -132,5 +132,10 @@ def init_wandb(cfg, job_type, enabled, name=None, extra_config=None, group=None,
 
 
 def log(run, metrics, step):
-    if run is not None:
+    """Log to wandb; a tracking failure (e.g. lost connection) is reported but never stops training."""
+    if run is None:
+        return
+    try:
         run.log(metrics, step=step)
+    except Exception as exc:  # checkpoints and stdout logs are the source of truth, tracking is best effort
+        print(f"warning: wandb logging failed at step {step}: {type(exc).__name__}: {exc}", flush=True)

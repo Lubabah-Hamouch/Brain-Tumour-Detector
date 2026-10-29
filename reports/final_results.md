@@ -302,6 +302,121 @@ labels look correct.**
   "slice through the sella" rather than "pituitary tumour present", which is an anatomical-level
   shortcut and not tumour detection.
 
+### Mitigation attempt: random-crop augmentation
+
+The classifier was retrained from scratch with one change, to try to break the format shortcut:
+a **random crop of the original image before letterboxing** (`RandomAreaCrop`, enabled in
+`configs/train_classification_crop.json`).
+
+- **The crop:** each training image is cropped to 70-100% of its area, with a width/height ratio
+  between 0.75 and 1.33, and then letterboxed to 384 × 384 as before.
+- **Why before letterboxing:** tumour images, almost all 512 × 512 squares, then appear with the
+  same varied shapes and padding bars as the mixed-format no-tumour images. Cropping after
+  letterboxing would keep each source's original bars and proportions.
+- **Everything else is identical:** the split, seed, augmentations, schedule, early stopping and
+  checkpoint rule. Validation and test preprocessing are unchanged.
+- **Training:** stopped early after epoch 12. The checkpoint kept is epoch 9, with validation
+  accuracy 98.56% and macro F1 0.985.
+- **Both checkpoints are kept:** `models/classification/` holds the original and
+  `models/classification_crop/` the mitigated model.
+
+**Headline metrics (1,037 test images):**
+
+| | Original | Crop-mitigated |
+|---|---|---|
+| Accuracy | 98.26% (18 errors) | 98.17% (19 errors) |
+| Macro F1 | 0.9826 | 0.9815 |
+| Test loss (weighted cross-entropy) | 0.0766 | **0.0505** |
+| F1 glioma / meningioma / no tumour / pituitary | 0.979 / 0.979 / 0.987 / 0.985 | 0.987 / 0.977 / 0.980 / 0.982 |
+| Tumour images called "no tumour" (missed tumours, of 778) | 3 | **1** |
+| No-tumour images called a tumour (false alarms, of 259) | **4** | 9 |
+
+- **Accuracy:** the two models are statistically indistinguishable. Each is wrong on about ten
+  images the other gets right (10 vs 11), and an exact McNemar test gives p = 1.0.
+- **Loss:** the lower test loss means the mitigated model's errors are made with less confidence.
+- **Error profile:** the models trade error types. The mitigated model misses fewer tumours (1 vs 3)
+  but raises more than twice as many false alarms on no-tumour images (9 vs 4). With these
+  counts, neither change is statistically meaningful on its own.
+
+**The three tracked gliomas the original model called "no tumour":**
+
+| Image | Original model | Crop-mitigated model |
+|---|---|---|
+| `Te-gl_350` (175 × 167) | no tumour, 0.9996 | **glioma (correct), 0.65** |
+| `Te-gl_97` (504 × 608) | no tumour, 0.9998 | meningioma, 0.72 (no tumour 0.18) |
+| `Te-gl_318` (197 × 229, CT) | no tumour, 0.91 | meningioma, 0.98 |
+
+All three are now recognised as tumours, and one is classified correctly. The other two are given
+the wrong tumour type. `Te-gl_318` is a CT image, for which the correct label can't be expected.
+
+**Format breakdown (gliomas, test set):**
+
+| Glioma images | Original | Crop-mitigated |
+|---|---|---|
+| 512 × 512 (261) | 4 errors (1.5%) | 3 errors (1.1%) |
+| Other formats (9) | 5 errors (56%) | 3 errors (33%) |
+
+On the natural test images the gap narrows, but with 9 images that change is not distinguishable
+from noise.
+
+**Format stress test.** This is a direct test of the shortcut, run on all test images
+(`src.training.format_stress_test`). Each image's content is left unchanged; only its file format
+is altered by resizing it to a typical no-tumour size before the usual preprocessing. A model that
+reads tumour appearance should barely react.
+
+| Tumour images (of 778) called "no tumour" | Unmodified | Resized to 225 × 225 | Resized to 210 × 234 |
+|---|---|---|---|
+| Original | 3 | 12 | 10 |
+| Crop-mitigated | 1 | 14 | 16 |
+
+| Overall accuracy | Unmodified | 225 × 225 | 210 × 234 |
+|---|---|---|---|
+| Original | 98.26% | 97.30% | 97.49% |
+| Crop-mitigated | 98.17% | 97.49% | 97.11% |
+
+- **Both models still shift towards "no tumour"** when a tumour image is given the low resolution
+  typical of the no-tumour source. Down-sampling also removes some genuine detail, but random
+  information loss would produce errors in all directions. Instead, most of the new errors go to
+  "no tumour" specifically.
+- **The mitigated model is no more robust here.** It reacts slightly more: 14-16 tumours lost
+  against 10-12.
+- **No-tumour images under the mitigated model:** they are classified more accurately once
+  resized to 225 × 225 (98.5% against 96.5% unmodified). That is further evidence that low
+  resolution itself still signals "no tumour" to it.
+
+**Errors new in the mitigated model.** These were inspected with `src.training.inspect_errors`.
+
+- **Pituitary called "no tumour":** `Tr-pi_322`, at 0.62. This is the one missed tumour, a 512 × 512
+  sagittal slice with no conspicuous sellar mass at this resolution.
+- **No tumour called a tumour type:** `Tr-no_59` and `Tr-no_383` called meningioma, `Tr-no_539` and
+  `Tr-no_543` pituitary, `Tr-no_777` pituitary, and `Tr-no_261` glioma.
+  - `Tr-no_539` and `Tr-no_543` are further sella-level slices from the same series as the original
+    model's errors.
+  - `Tr-no_777` contains a large cyst-like cavity. It is labelled no tumour and is plausibly not a
+    tumour, but it is not a normal brain.
+  - `Tr-no_261` sits on the decision boundary: glioma 0.51 in the evaluation, which uses
+    mixed-precision inference. Under full-precision inference it flips to no tumour (0.52 against
+    0.48).
+- **Other new errors:**
+  - three 512 × 512 gliomas called meningioma;
+  - one meningioma called pituitary.
+- **Interpretation:** the extra false alarms are what weakening the format cue looks like from the
+  other side. Part of the original model's no-tumour accuracy came from recognising the no-tumour
+  source format. With that cue partly removed, the model has to judge more of these images by
+  content, and gets a few more wrong.
+
+**Assessment: partially fixed.**
+
+- **What changed:** the crop removed the aspect-ratio and framing part of the shortcut. All three
+  missed gliomas are now recognised as tumours, and there are fewer missed tumours overall (1 vs 3).
+  Overall accuracy is unchanged and calibration is better.
+- **What didn't change:** the resolution part of the shortcut. The stress test shows both models
+  still treat a low-resolution image as evidence for "no tumour". The crop could not address this,
+  because it changes framing, not resolution.
+- **Next step:** a resolution-targeted augmentation is the obvious follow-up: randomly down-sample
+  training images (for example to 150-512 px) before upsampling, plus JPEG re-compression. The
+  format stress test is the right yardstick for it.
+
 ---
 
 ## Limitations
@@ -315,14 +430,16 @@ labels look correct.**
   dominant 512 × 512 format were misclassified 56% of the time (5 of 9), against 1.5% for
   512 × 512 gliomas. All 3 tumours called "no tumour" are visible lesions in non-standard formats,
   one of them a CT scan (see [Inspection of the most serious errors](#inspection-of-the-most-serious-errors)).
-  Possible mitigations, none applied yet:
-  - augmentation that removes the format cue: random downscaling and blur, JPEG re-compression,
-    random aspect-ratio padding;
+  Random-crop augmentation removed the framing and aspect-ratio part of the cue, but not the
+  resolution part. In the format stress test, both models still move tumour images towards "no
+  tumour" when the images are down-sampled (see
+  [Mitigation attempt](#mitigation-attempt-random-crop-augmentation)). Remaining options:
+  - resolution augmentation (random down-sampling and blur, JPEG re-compression);
   - cropping every image to the head bounding box before resizing;
-  - evaluating on a format-matched subset;
   - testing on an external dataset.
 
-  Until one of these is done, the 98.3% should be read as in-distribution accuracy only.
+  Until the stress-test gap closes, the classification accuracy should be read as in-distribution
+  accuracy only.
 - **The classifier also confuses anatomy with pathology at the sella.** Normal slices through the
   sella turcica can be called "pituitary" (4 test images), because the pituitary class is dominated
   by those views.
@@ -351,6 +468,13 @@ python -m src.training.inspect_errors --files Te-gl_350.jpg Te-gl_97.jpg Te-gl_3
     --out reports/figures/glioma_missed_as_notumor.png
 python -m src.training.inspect_errors --files Tr-no_173.jpg Tr-no_344.jpg Tr-no_674.jpg Tr-no_907.jpg \
     --out reports/figures/notumor_called_pituitary.png
+
+# crop-mitigated classifier: training, test evaluation, comparison, format stress test
+python -m src.training.train_classification --config configs/train_classification_crop.json
+python -m src.training.evaluate_classification --checkpoint models/classification_crop/best.pt \
+    --output classification_test_crop.json
+python -m src.training.compare_classifiers classification_test.json classification_test_crop.json
+python -m src.training.format_stress_test models/classification/best.pt models/classification_crop/best.pt
 ```
 
 | File | Contents |
@@ -359,6 +483,9 @@ python -m src.training.inspect_errors --files Tr-no_173.jpg Tr-no_344.jpg Tr-no_
 | `results/segmentation_test_per_case.csv` | Dice per test patient, per model |
 | `results/classification_test.json` | Test metrics, confusion matrix, every misclassified image |
 | `results/test_confidence_intervals.json` | Bootstrap and Wilson intervals, paired comparisons |
+| `results/classification_test_crop.json` | Test metrics for the crop-mitigated classifier |
+| `results/classification_comparison.json` | Original vs crop-mitigated: format breakdown, tracked errors, McNemar test |
+| `results/format_stress_test.json` | Accuracy and tumour-to-no-tumour flips when only image format is changed |
 
 Training: `python -m src.training.train_segmentation --fold k` for k = 1..5, and
 `python -m src.training.train_classification`. Settings are in `configs/`.
@@ -368,4 +495,5 @@ wandb runs (private to the project team):
 - Segmentation test evaluation: https://forge.coreweave.com/wandb/lubabah-universit-mundiapolis-casablanca/brain-tumor-segmentation/runs/vr1kl5yz
 - Classification test evaluation: https://forge.coreweave.com/wandb/lubabah-universit-mundiapolis-casablanca/brain-tumor-classification/runs/yb1ubrsw
 - Segmentation training, folds 1-5: `h9opulfq`, `eph5gm7a`, `rugue12h`, `o9inkjww`, `iv9fbnnd`
-- Classification training: `7lxvraje`
+- Classification training: `7lxvraje` (original), `0wlar3w4` (crop mitigation)
+- Classification test evaluation, crop-mitigated model: https://forge.coreweave.com/wandb/lubabah-universit-mundiapolis-casablanca/brain-tumor-classification/runs/sqg9fe9j

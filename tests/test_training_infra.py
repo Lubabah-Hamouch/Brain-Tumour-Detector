@@ -112,3 +112,35 @@ def test_patch_flip_keeps_image_and_targets_aligned(tmp_path):
         ds.set_epoch(epoch)
         x, y = ds[0]
         np.testing.assert_array_equal(y, (x[:3] > 0).astype(np.float32))
+
+
+def test_random_area_crop_respects_scale_and_ratio():
+    from PIL import Image
+
+    from src.training.train_classification import RandomAreaCrop
+
+    torch.manual_seed(0)
+    img = Image.new("L", (512, 512))
+    crop = RandomAreaCrop(scale=(0.7, 1.0), ratio=(0.75, 1.3333))
+    for _ in range(200):
+        w, h = crop(img).size
+        assert 0.7 * 512 * 512 * 0.97 <= w * h <= 512 * 512
+        assert 0.75 * 0.97 <= w / h <= 1.3333 * 1.03
+
+
+def test_crop_is_training_only():
+    from src.training.config import ClassificationTrainConfig
+
+    cfg = ClassificationTrainConfig.from_json(PROJECT_ROOT / "configs" / "train_classification_crop.json")
+    assert cfg.random_crop and cfg.checkpoint_dir != ClassificationTrainConfig().checkpoint_dir
+    source = (PROJECT_ROOT / "src" / "training" / "train_classification.py").read_text()
+    # validation dataset is built without crop or augmentation
+    assert 'BrainMRIClassificationDataset("val", image_size=cfg.image_size)' in source
+
+
+def test_mcnemar_exact():
+    from src.training.compare_classifiers import mcnemar_exact
+
+    assert mcnemar_exact(0, 5) == pytest.approx(2 / 32)
+    assert mcnemar_exact(3, 3) == 1.0 and mcnemar_exact(0, 0) == 1.0
+    assert mcnemar_exact(1, 9) == pytest.approx(2 * (1 + 10) / 1024)

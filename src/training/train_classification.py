@@ -51,6 +51,25 @@ def train_augmentation():
     ])
 
 
+class RandomAreaCrop:
+    """Crop a random region covering `scale` of the image area with width/height ratio in `ratio`.
+
+    Applied to the original image before letterboxing, so the letterboxed
+    input no longer reveals the source image's size and aspect ratio: tumour
+    images, which are almost all 512 x 512 squares, get varied shapes and
+    padding just like the mixed-format no-tumour images. Uses torchvision's
+    RandomResizedCrop sampling but leaves resizing to the letterbox.
+    """
+
+    def __init__(self, scale=(0.7, 1.0), ratio=(0.75, 1.3333)):
+        self.scale = tuple(scale)
+        self.ratio = tuple(ratio)
+
+    def __call__(self, img):
+        top, left, height, width = transforms.RandomResizedCrop.get_params(img, self.scale, self.ratio)
+        return img.crop((left, top, left + width, top + height))
+
+
 def subset(dataset, n, seed):
     if not n or n >= len(dataset):
         return dataset
@@ -122,7 +141,8 @@ def train(cfg, max_train=0, max_val=0, use_wandb=True, run_name=None):
     device = torch.device("cuda")
 
     augment = train_augmentation() if cfg.augment else None
-    full_train = BrainMRIClassificationDataset("train", image_size=cfg.image_size, augment=augment)
+    crop = RandomAreaCrop(cfg.crop_scale, cfg.crop_ratio) if cfg.random_crop else None
+    full_train = BrainMRIClassificationDataset("train", image_size=cfg.image_size, augment=augment, crop=crop)
     # Class weights always come from the full training split, not a smoke-test subset.
     class_counts = list(full_train.class_counts().values())
     train_set = subset(full_train, max_train, cfg.seed)
@@ -225,9 +245,12 @@ def train(cfg, max_train=0, max_val=0, use_wandb=True, run_name=None):
     summary = {"steps": step, "epochs_run": epoch + 1, "best_epoch": best_epoch, "best_macro_f1": best_f1,
                "best_val_loss": best_loss, "checkpoint": str(out_dir / "best.pt"), **gpu_memory()}
     if run is not None:
-        run.summary.update({"best_macro_f1": best_f1, "best_epoch": best_epoch, "best_val_loss": best_loss})
         summary["wandb_url"] = run.url
-        run.finish()
+        try:
+            run.summary.update({"best_macro_f1": best_f1, "best_epoch": best_epoch, "best_val_loss": best_loss})
+            run.finish()
+        except Exception as exc:  # training already succeeded; do not fail on tracking
+            print(f"warning: wandb finish failed: {type(exc).__name__}: {exc}", flush=True)
     return summary
 
 

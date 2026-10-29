@@ -10,6 +10,7 @@ with the confusion matrix and every misclassified test image.
 
 Usage:
     python -m src.training.evaluate_classification
+    python -m src.training.evaluate_classification --checkpoint models/classification_crop/best.pt         --output classification_test_crop.json --run-name test-eval-crop
 """
 import argparse
 import json
@@ -31,12 +32,15 @@ from src.training.utils import load_checkpoint
 def main():
     parser = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
     parser.add_argument("--checkpoint", type=Path, default=PROJECT_ROOT / "models" / "classification" / "best.pt")
+    parser.add_argument("--output", default="classification_test.json", help="file name under reports/results/")
+    parser.add_argument("--run-name", default="test-eval")
     parser.add_argument("--no-wandb", action="store_true")
     args = parser.parse_args()
 
     device = torch.device("cuda")
     state = load_checkpoint(args.checkpoint, device)
-    cfg = ClassificationTrainConfig(**{k: v for k, v in state["config"].items() if k != "effective_batch_size"})
+    known = set(ClassificationTrainConfig.__dataclass_fields__)
+    cfg = ClassificationTrainConfig(**{k: v for k, v in state["config"].items() if k in known})
     model = EfficientNetV2Classifier(pretrained=False).to(device)
     model.load_state_dict(state["model"])
 
@@ -51,12 +55,12 @@ def main():
     metrics = {k.replace("val/", "test/"): float(v) for k, v in metrics.items()}
     errors = [{"file": test_set.samples[i][0].name, "true": CLASSES[labels[i]], "predicted": CLASSES[preds[i]],
                "confidence": round(float(confidence[i]), 4)} for i in (labels != preds).nonzero()[0]]
-    result = {"checkpoint_epoch": state["epoch"] + 1, "validation_metrics": state["metrics"],
+    result = {"checkpoint": args.checkpoint.resolve().relative_to(PROJECT_ROOT).as_posix(), "checkpoint_epoch": state["epoch"] + 1, "validation_metrics": state["metrics"],
               "test_images": len(test_set), "test_class_counts": test_set.class_counts(), "test": metrics,
               "confusion_matrix": {"classes": list(CLASSES), "rows_true_columns_predicted": cm.tolist()},
               "misclassified": errors}
     RESULTS_DIR.mkdir(parents=True, exist_ok=True)
-    (RESULTS_DIR / "classification_test.json").write_text(json.dumps(result, indent=1) + "\n")
+    (RESULTS_DIR / args.output).write_text(json.dumps(result, indent=1) + "\n")
 
     print(f"test images {len(test_set)}: accuracy {metrics['test/accuracy']:.4f}, macro F1 {metrics['test/macro_f1']:.4f}, "
           f"loss {metrics['test/loss']:.4f}")
@@ -71,8 +75,9 @@ def main():
     if not args.no_wandb:
         import wandb
 
-        run = wandb.init(project=cfg.wandb_project, job_type="eval", name="test-eval",
-                         config={"checkpoint_epoch": state["epoch"] + 1, "test_images": len(test_set)})
+        run = wandb.init(project=cfg.wandb_project, job_type="eval", name=args.run_name,
+                         config={"checkpoint": str(args.checkpoint), "checkpoint_epoch": state["epoch"] + 1,
+                                 "test_images": len(test_set), "train_config": state["config"]})
         run.summary.update(metrics)
         run.log({"test/confusion_matrix": wandb.plot.confusion_matrix(
                      y_true=labels.tolist(), preds=preds.tolist(), class_names=list(CLASSES),

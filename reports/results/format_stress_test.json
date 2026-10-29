@@ -1,0 +1,94 @@
+{
+ "split": "test",
+ "images": 1037,
+ "tumour_images": 778,
+ "conditions": {
+  "original": null,
+  "small_square": [
+   225,
+   225
+  ],
+  "small_portrait": [
+   210,
+   234
+  ]
+ },
+ "models": {
+  "models/classification/best.pt": {
+   "original": {
+    "accuracy": 0.982642237222758,
+    "tumour_images_called_no_tumour": 3,
+    "tumour_recall_any_tumour_class": 0.9961439588688946,
+    "predictions_changed_vs_original": 0,
+    "accuracy_by_class": {
+     "glioma": 0.9666666666666667,
+     "meningioma": 0.9789915966386554,
+     "notumor": 0.9845559845559846,
+     "pituitary": 1.0
+    }
+   },
+   "small_square": {
+    "accuracy": 0.9729990356798457,
+    "tumour_images_called_no_tumour": 12,
+    "tumour_recall_any_tumour_class": 0.9845758354755784,
+    "predictions_changed_vs_original": 15,
+    "accuracy_by_class": {
+     "glioma": 0.937037037037037,
+     "meningioma": 0.9663865546218487,
+     "notumor": 0.9884169884169884,
+     "pituitary": 1.0
+    }
+   },
+   "small_portrait": {
+    "accuracy": 0.9749276759884281,
+    "tumour_images_called_no_tumour": 10,
+    "tumour_recall_any_tumour_class": 0.987146529562982,
+    "predictions_changed_vs_original": 15,
+    "accuracy_by_class": {
+     "glioma": 0.9407407407407408,
+     "meningioma": 0.9663865546218487,
+     "notumor": 0.9922779922779923,
+     "pituitary": 1.0
+    }
+   }
+  },
+  "models/classification_crop/best.pt": {
+   "original": {
+    "accuracy": 0.9816779170684667,
+    "tumour_images_called_no_tumour": 1,
+    "tumour_recall_any_tumour_class": 0.9987146529562982,
+    "predictions_changed_vs_original": 0,
+    "accuracy_by_class": {
+     "glioma": 0.9777777777777777,
+     "meningioma": 0.9873949579831933,
+     "notumor": 0.9652509652509652,
+     "pituitary": 0.9962962962962963
+    }
+   },
+   "small_square": {
+    "accuracy": 0.9749276759884281,
+    "tumour_images_called_no_tumour": 14,
+    "tumour_recall_any_tumour_class": 0.9820051413881749,
+    "predictions_changed_vs_original": 23,
+    "accuracy_by_class": {
+     "glioma": 0.9481481481481482,
+     "meningioma": 0.9831932773109243,
+     "notumor": 0.9845559845559846,
+     "pituitary": 0.9851851851851852
+    }
+   },
+   "small_portrait": {
+    "accuracy": 0.9710703953712633,
+    "tumour_images_called_no_tumour": 16,
+    "tumour_recall_any_tumour_class": 0.9794344473007712,
+    "predictions_changed_vs_original": 27,
+    "accuracy_by_class": {
+     "glioma": 0.937037037037037,
+     "meningioma": 0.9789915966386554,
+     "notumor": 0.9845559845559846,
+     "pituitary": 0.9851851851851852
+    }
+   }
+  }
+ }
+}

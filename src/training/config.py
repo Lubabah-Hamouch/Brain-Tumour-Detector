@@ -47,7 +47,7 @@ class TrainConfig:
         unknown = set(values) - known
         if unknown:
             raise ValueError(f"Unknown {cls.__name__} keys: {sorted(unknown)}")
-        for key in ("widths", "level_weights"):
+        for key in ("widths", "level_weights", "crop_scale", "crop_ratio"):
             if key in values:
                 values[key] = tuple(values[key])
         return cls(**values)
@@ -121,6 +121,13 @@ class ClassificationTrainConfig(TrainConfig):
     # checkpoint kept is the epoch with the best validation macro F1.
     patience: int = 5
     augment: bool = True
+    # Random crop of the original image (fraction of its area, width/height
+    # ratio range) before letterboxing. Off by default; enabled in
+    # train_classification_crop.json to break the link between source image
+    # format (size, aspect ratio) and class found in the error analysis.
+    random_crop: bool = False
+    crop_scale: tuple = (0.7, 1.0)
+    crop_ratio: tuple = (0.75, 1.3333)
     num_workers: int = 6
     misclassified_every: int = 2
     misclassified_max: int = 24
