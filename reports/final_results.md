@@ -8,7 +8,7 @@ Machine-readable versions are in [`results/`](results/).
 | Task | Model | Test set | Headline result |
 |---|---|---|---|
 | Brain tumour segmentation (BraTS 2021) | 3D U-Net, 5-fold ensemble + ET post-processing | 189 patients | mean Dice **0.900** (WT 0.928, TC 0.894, ET 0.877) |
-| Tumour type classification (4 classes) | EfficientNetV2-S, fine-tuned | 1,037 images | accuracy **98.3%** (95% CI 97.3-98.9%), macro F1 0.983 |
+| Tumour type classification (4 classes) | EfficientNetV2-S, fine-tuned | 1,037 images | accuracy **98.3%** (95% CI 97.3-98.9%), macro F1 0.983; in-distribution only, see the [image-format shortcut](#inspection-of-the-most-serious-errors) |
 
 ---
 
@@ -216,19 +216,91 @@ Test confusion matrix (rows: true class, columns: predicted):
 The full list, with file names and confidences, is in `results/classification_test.json`, and the
 images are in the wandb run.
 
-- **Missed tumours: 3 gliomas predicted as no tumour** (`Te-gl_318`, `Te-gl_350`, `Te-gl_97`). Two
-  of them were predicted with over 99.9% confidence. This is the clinically most serious error
-  type, at 3 of the 778 tumour images (0.4%).
-  - Confidence this high usually points to an image with no visible tumour on that slice, or a
-    labelling problem.
-  - These three should be reviewed visually before any claim about miss rate is made.
+- **Missed tumours: 3 gliomas predicted as no tumour** (`Te-gl_350`, `Te-gl_97`, `Te-gl_318`). This
+  is the clinically most serious error type, at 3 of the 778 tumour images (0.4%). Visual
+  inspection (below) shows these are **genuine misses of visible lesions, not labelling errors**.
 - **No tumour predicted as pituitary: 4 images.** These are false alarms, and they make up most of
-  pituitary's precision loss.
+  pituitary's precision loss. Inspection shows tumour-free slices through the sella region (below).
 - **Glioma and meningioma confused: 7 images** (5 one way, 2 the other). This was also the main
   confusion on the validation set; the two can look similar on a single 2D slice.
 - **Other: 4 images.** 3 meningioma and 1 glioma were predicted as pituitary.
 - **Generalisation:** test accuracy is 0.6 points below validation accuracy. That is consistent
   with selecting the checkpoint on validation data, and the test result is the one to quote.
+
+### Inspection of the most serious errors
+
+The two error groups with clinical consequences were inspected image by image: tumours called
+"no tumour", and normal brains called "pituitary". For each image, the review covered:
+
+- the original file;
+- the 384 × 384 input the model sees;
+- the class probabilities;
+- a Grad-CAM heatmap for the predicted class.
+
+The figures are generated with `src.training.inspect_errors` (see [Reproducing](#reproducing)). They
+are not committed because they contain dataset images. The hypothesis going in was that the three
+"missed" gliomas might be tumour-free slices carrying a wrong source label, like the label
+conflicts found during dataset cleaning. **That hypothesis was wrong.**
+
+**Gliomas predicted as no tumour: all three show a clearly visible lesion.**
+
+| Image | Original format | What it shows | P(no tumour) |
+|---|---|---|---|
+| `Te-gl_350` | 175 × 167, RGB | Axial FLAIR-type MRI with a large hyperintense frontal lesion | 0.9996 |
+| `Te-gl_97` | 504 × 608, RGB | Axial T2 MRI with a large hyperintense lesion in the lateral hemisphere | 0.9998 |
+| `Te-gl_318` | 197 × 229, RGB | **A CT scan, not MRI**, with a rounded lesion showing internal layering | 0.9077 |
+
+- None of the three has a near-duplicate anywhere in the dataset, so there is no conflicting copy
+  that would suggest a source labelling mistake.
+- `Te-gl_318` is a data-quality problem in its own right: a CT image filed in an MRI dataset. Its
+  tumour-type label cannot be verified from the image.
+- **The Grad-CAM heatmaps agree that the lesion was not used.** For the predicted "no tumour"
+  class, the attribution sits on normal-appearing brain away from the lesion, and the lesion
+  itself contributes little. The model judged the rest of the slice to look normal and did not use
+  the tumour.
+
+**Why these were missed: an image-format shortcut.** The three images share one property: none is
+in the 512 × 512 format that dominates the tumour classes. In this dataset, the tumour classes come
+mainly from Figshare and SARTAJ, while the no-tumour class comes largely from Br35H, a separately collected
+set of mixed-size images. Image format therefore predicts the label:
+
+| Training split | 512 × 512 | Smaller side < 256 px | Square |
+|---|---|---|---|
+| Glioma | 95.3% | 1.0% | 95.9% |
+| Meningioma | 79.9% | 8.7% | 82.7% |
+| **No tumour** | **1.3%** | **68.2%** | **32.7%** |
+| Pituitary | 95.2% | 1.0% | 97.5% |
+
+The model can pick up this cue without looking at the anatomy. Format leaves clear traces in the
+input:
+
+- small images are blurred when upsampled to 384 px;
+- non-square images get black letterbox bars;
+- JPEG compression differs between sources.
+
+The test errors match this explanation:
+
+| Test glioma images | Misclassified |
+|---|---|
+| 512 × 512 (261 images) | 4 (1.5%) |
+| **Any other format (9 images)** | **5 (56%)**, including all 3 predicted as no tumour |
+
+Nine images is a small sample, but the gap is large, and it matches the direction of the
+training-set imbalance. The headline 98.3% accuracy is measured on a test set with the same
+format-label correlation as training. It therefore **overstates performance on images whose format
+does not match the source each class came from**, for example tumour images from a different
+scanner, export pipeline or modality.
+
+**No tumour predicted as pituitary (`Tr-no_173`, `Tr-no_344`, `Tr-no_674`, `Tr-no_907`): the
+labels look correct.**
+
+- None of the four shows a tumour, so the "no tumour" label stands.
+- Three are near-identical axial slices at the skull base, through the sella turcica where the
+  pituitary gland sits, apparently from one patient. The fourth is a normal mid-sagittal T1 slice
+  with the sella in full view.
+- Pituitary-tumour images are dominated by exactly these views. The model has partly learned
+  "slice through the sella" rather than "pituitary tumour present", which is an anatomical-level
+  shortcut and not tumour detection.
 
 ---
 
@@ -237,6 +309,23 @@ images are in the wandb run.
 - **Single test split per task.** The intervals above reflect patient sampling within that split,
   not variation between institutions or scanners. BraTS 2021 pools many institutions, but the test
   set comes from the same pool as the training data.
+- **Classification has an image-format shortcut.** Image format (resolution, aspect ratio, source)
+  is strongly correlated with class in this dataset, because the no-tumour class was assembled
+  mainly from a different source than the tumour classes. On the test set, gliomas outside the
+  dominant 512 × 512 format were misclassified 56% of the time (5 of 9), against 1.5% for
+  512 × 512 gliomas. All 3 tumours called "no tumour" are visible lesions in non-standard formats,
+  one of them a CT scan (see [Inspection of the most serious errors](#inspection-of-the-most-serious-errors)).
+  Possible mitigations, none applied yet:
+  - augmentation that removes the format cue: random downscaling and blur, JPEG re-compression,
+    random aspect-ratio padding;
+  - cropping every image to the head bounding box before resizing;
+  - evaluating on a format-matched subset;
+  - testing on an external dataset.
+
+  Until one of these is done, the 98.3% should be read as in-distribution accuracy only.
+- **The classifier also confuses anatomy with pathology at the sella.** Normal slices through the
+  sella turcica can be called "pituitary" (4 test images), because the pituitary class is dominated
+  by those views.
 - **Classification is slice-level.** The 4-class dataset is a collection of single 2D slices
   without patient identifiers. Near-duplicate clustering prevents the most direct leakage, but
   different slices of the same patient could still fall in different splits. The test accuracy
@@ -256,6 +345,12 @@ From the trained checkpoints in `models/` (not tracked in git):
 python -m src.training.evaluate_segmentation      # ET threshold on out-of-fold validation, then test (~25 min on an RTX 4060 Laptop)
 python -m src.training.evaluate_classification    # test split (~1 min)
 python -m src.training.bootstrap_results          # confidence intervals from the per-case results
+
+# error inspection figures (written to reports/figures/, untracked because they contain dataset images)
+python -m src.training.inspect_errors --files Te-gl_350.jpg Te-gl_97.jpg Te-gl_318.jpg \
+    --out reports/figures/glioma_missed_as_notumor.png
+python -m src.training.inspect_errors --files Tr-no_173.jpg Tr-no_344.jpg Tr-no_674.jpg Tr-no_907.jpg \
+    --out reports/figures/notumor_called_pituitary.png
 ```
 
 | File | Contents |
