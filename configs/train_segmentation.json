@@ -7,6 +7,7 @@
   "weight_decay": 3e-05,
   "num_workers": 4,
   "max_step_seconds": 3.0,
+  "slow_step_patience": 5,
   "wandb_project": "brain-tumor-segmentation",
   "patch_size": 128,
   "tumor_ratio": 0.75,

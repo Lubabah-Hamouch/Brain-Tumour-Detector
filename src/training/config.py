@@ -25,7 +25,11 @@ class TrainConfig:
     num_workers: int = 2
     # A compute step far slower than profiled usually means the Windows driver
     # has spilled GPU memory into system RAM; training stops instead of crawling.
+    # A real spill slows every step, so several consecutive slow steps are
+    # required; brief contention from other programs using the GPU produces
+    # only isolated slow steps and should not end a multi-hour run.
     max_step_seconds: float = 3.0
+    slow_step_patience: int = 5
     wandb_project: str = ""
 
     @property

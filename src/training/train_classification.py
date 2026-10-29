@@ -140,7 +140,7 @@ def train(cfg, max_train=0, max_val=0, use_wandb=True, run_name=None):
     scheduler = warmup_cosine(optimizer, cfg.warmup_epochs * steps_per_epoch, cfg.epochs * steps_per_epoch,
                               cfg.min_lr_ratio)
     scaler = torch.amp.GradScaler("cuda", enabled=cfg.mixed_precision)
-    timer = StepTimer(cfg.max_step_seconds)
+    timer = StepTimer(cfg.max_step_seconds, patience=cfg.slow_step_patience)
 
     weights = inverse_frequency_weights(class_counts).tolist()
     run = init_wandb(cfg, "train", use_wandb, run_name, extra_config={

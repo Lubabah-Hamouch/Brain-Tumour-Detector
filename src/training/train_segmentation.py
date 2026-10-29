@@ -135,7 +135,7 @@ def train(cfg, max_cases=0, use_wandb=True, run_name=None, resume=False):
     scheduler = warmup_cosine(optimizer, cfg.warmup_epochs * steps_per_epoch, cfg.epochs * steps_per_epoch,
                               cfg.min_lr_ratio)
     scaler = torch.amp.GradScaler("cuda", enabled=cfg.mixed_precision)
-    timer = StepTimer(cfg.max_step_seconds)
+    timer = StepTimer(cfg.max_step_seconds, patience=cfg.slow_step_patience)
 
     start_epoch, step, best, run_id = 0, 0, -1.0, None
     if resume:
