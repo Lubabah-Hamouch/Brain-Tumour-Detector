@@ -70,7 +70,7 @@ def nested_labels(regions):
     return np.select([et, tc, wt], [3, 2, 1], 0)
 
 
-def slice_figure(kept, per_case, epoch):
+def slice_figure(kept, per_case, title):
     """One row per case: FLAIR, T1ce, ground truth overlay, prediction overlay, on the axial slice of largest WT."""
     fig, axes = plt.subplots(len(kept), 4, figsize=(12, 3 * len(kept)), squeeze=False)
     for row, (case, (image, targets, probs)) in zip(axes, kept.items()):
@@ -89,7 +89,7 @@ def slice_figure(kept, per_case, epoch):
                           origin="lower", interpolation="nearest")
             ax.set_title(title, fontsize=8)
             ax.axis("off")
-    fig.suptitle(f"epoch {epoch}: green edema, red necrotic core, yellow enhancing tumour", fontsize=9)
+    fig.suptitle(f"{title}: green edema, red necrotic core, yellow enhancing tumour", fontsize=9)
     fig.tight_layout()
     return fig
 
@@ -104,7 +104,7 @@ def validate(model, val_ids, vis_ids, cfg, device, epoch, run):
     if run is not None and kept:
         import wandb
 
-        fig = slice_figure({c: kept[c] for c in vis_ids if c in kept}, per_case, epoch)
+        fig = slice_figure({c: kept[c] for c in vis_ids if c in kept}, per_case, f"epoch {epoch}")
         metrics["val/slices"] = wandb.Image(fig)
         plt.close(fig)
     model.train()

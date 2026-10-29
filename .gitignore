@@ -54,6 +54,9 @@ models/*
 # Generated reports and figures
 reports/*
 !reports/.gitkeep
+# Final evaluation results (metrics only, no images or patient data) are tracked
+!reports/final_results.md
+!reports/results/
 figure*.png
 
 # Experiment tracking (local run files)
