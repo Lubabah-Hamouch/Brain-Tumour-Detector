@@ -181,6 +181,24 @@ export function UploadView({ files, evaluation, sampleCase, loadingSample, runEr
             {!files.length && <p className={styles.empty}>No files yet</p>}
             <div className={ws.rule} />
           </section>
+
+          {/* Narrow screens: the sidebar (and its Run button) sits below the page, so once files are
+              being added, keep the count and the Run button in view here. */}
+          {files.length > 0 && (
+            <div className={styles.mobileStatus}>
+              <span className={styles.mobileStatusText}>
+                <span>
+                  <span className="mono">{4 - missing.length}</span> of <span className="mono">4</span> scans added
+                </span>
+                <span className="caption">
+                  {evaluation.ready ? "Ready to run" : `Still needed: ${missing.join(", ")}`}
+                </span>
+              </span>
+              <Button disabled={!evaluation.ready} onClick={on.onRun} className={styles.mobileRun}>
+                Run
+              </Button>
+            </div>
+          )}
         </div>
       </main>
 
