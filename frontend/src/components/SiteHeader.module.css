@@ -1,0 +1,65 @@
+.header {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 12px 40px;
+  padding: 20px var(--page-margin);
+  border-bottom: 1px solid var(--color-hairline);
+  background: linear-gradient(180deg, rgba(255, 255, 255, 0.025), rgba(255, 255, 255, 0));
+}
+
+.brand {
+  display: inline-flex;
+  align-items: center;
+  min-height: 44px;
+  color: var(--color-text-strong);
+  text-decoration: none;
+  font-weight: 600;
+  font-size: var(--text-12);
+  letter-spacing: 0.24em;
+  text-transform: uppercase;
+}
+
+.nav {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px 36px;
+  margin-left: auto;
+  font-size: var(--text-12);
+  letter-spacing: var(--track-12);
+  text-transform: uppercase;
+}
+
+.link,
+.active {
+  display: inline-flex;
+  align-items: center;
+  min-height: 44px;
+  text-decoration: none;
+  transition: color var(--dur-hover) var(--ease);
+}
+
+/* Active state is brightness and weight plus the underline, never colour */
+.link {
+  color: var(--color-text-muted);
+  font-weight: 500;
+}
+
+.link:hover {
+  color: var(--color-text-strong);
+}
+
+.active {
+  color: var(--color-text-strong);
+  font-weight: 600;
+}
+
+@media (max-width: 640px) {
+  .header {
+    padding: 16px 20px;
+  }
+  .nav {
+    margin-left: 0;
+    gap: 4px 20px;
+  }
+}

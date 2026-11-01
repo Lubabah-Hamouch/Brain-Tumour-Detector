@@ -1,0 +1,105 @@
+.figure {
+  flex: 7 1 520px;
+  min-width: 0;
+  margin: 0;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 24px;
+}
+
+.frame {
+  position: relative;
+  width: min(100%, 600px);
+  aspect-ratio: 996 / 1200;
+  overflow: hidden;
+}
+
+/* Fades in while resolving from a 16 px blur to sharp */
+.image {
+  width: 100%;
+  height: 100%;
+  object-fit: contain;
+  animation: resolve var(--dur-resolve) var(--ease) 150ms both;
+}
+
+/* One thin light line crosses the image once, top to bottom: "processed". Never loops. */
+.sweep {
+  position: absolute;
+  left: 0;
+  right: 0;
+  top: 0;
+  height: 96px;
+  margin-top: -96px;
+  pointer-events: none;
+  background: linear-gradient(180deg, rgba(255, 255, 255, 0), rgba(255, 255, 255, 0.05));
+  border-bottom: 1px solid rgba(255, 255, 255, 0.75);
+  box-shadow: 0 1px 14px rgba(255, 255, 255, 0.3);
+  animation: sweep var(--dur-sweep) cubic-bezier(0.45, 0, 0.2, 1) var(--dur-sweep-delay) both;
+}
+
+@keyframes resolve {
+  from {
+    opacity: 0;
+    filter: blur(16px);
+  }
+  to {
+    opacity: 1;
+    filter: blur(0);
+  }
+}
+
+@keyframes sweep {
+  0% {
+    top: 0%;
+    opacity: 0;
+  }
+  8% {
+    opacity: 1;
+  }
+  92% {
+    opacity: 1;
+  }
+  100% {
+    top: 100%;
+    opacity: 0;
+  }
+}
+
+.missing {
+  position: absolute;
+  inset: 0;
+  margin: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 32px;
+  text-align: center;
+  font-size: var(--text-14);
+  color: var(--color-text-muted);
+  box-shadow: inset 0 0 0 1px var(--color-hairline);
+}
+
+.caption {
+  width: min(100%, 600px);
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: space-between;
+  gap: 10px 24px;
+  font-size: var(--text-12);
+  line-height: var(--lh-12);
+  color: var(--color-text-muted);
+}
+
+.legend {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 20px;
+}
+
+.swatch {
+  display: inline-block;
+  width: 8px;
+  height: 8px;
+  margin-right: 8px;
+}

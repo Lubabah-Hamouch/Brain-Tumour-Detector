@@ -1,0 +1,5 @@
+# Offline rendering of the Overview hero image (src/visualization/render_hero.py).
+# Install on top of requirements.txt; not needed for training or the API.
+pyvista==0.49.2
+vtk==9.7.1
+scikit-image==0.26.0

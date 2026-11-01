@@ -137,23 +137,45 @@ class SegmenterService:
                             "skull-stripped. The model expects skull-stripped BraTS-style input.")
         return image, ref, warnings
 
-    def segment(self, files, inline_mask=False, base_url=""):
+    def prepare(self, files):
+        """Read and validate the uploaded study. Fast (well under a second) and raises ApiError on bad input,
+        so it runs inside the request and the client gets a 4xx immediately."""
         t0 = time.perf_counter()
         image, ref, warnings = self.load_study(files)
+        return {"image": image, "ref": ref, "warnings": warnings, "load_seconds": time.perf_counter() - t0}
+
+    def segment(self, files, inline_mask=False, base_url=""):
+        """Synchronous convenience: prepare + run."""
+        return self.run(self.prepare(files), inline_mask, base_url)
+
+    def run(self, study, inline_mask=False, base_url="", progress=None):
+        """Preprocess, infer with every fold model, post-process. Slow: seconds on a GPU, minutes on a CPU.
+
+        progress(stage, fraction, detail) is called as real work completes: stage is one of
+        'preprocessing', 'inference', 'postprocessing'; fraction is the share of that stage done.
+        """
+        report = progress or (lambda stage, fraction, detail="": None)
+        image, ref, warnings = study["image"], study["ref"], study["warnings"]
         shape = list(image.shape[1:])
         spacing = [float(z) for z in ref.header.get_zooms()[:3]]
         t1 = time.perf_counter()
 
+        report("preprocessing", 0.0, "Z-score inside the brain, crop to the brain")
         x, box = preprocess_image(image, self.cfg["patch_size"])
         x_t = torch.from_numpy(x).to(self.device)
         t2 = time.perf_counter()
 
         with self._lock:
             total, fold_masks = None, []
-            for model in self.models.values():
+            n_models = len(self.models)
+            report("inference", 0.0, f"Model 1 of {n_models}")
+            for i, model in enumerate(self.models.values()):
                 probs = predict(model, x_t, self.cfg)
                 total = probs if total is None else total + probs
                 fold_masks.append(probs > 0.5)
+                done = i + 1
+                report("inference", done / n_models,
+                       f"Model {min(done + 1, n_models)} of {n_models}" if done < n_models else f"{n_models} models done")
             ensemble = total / len(self.models)
             masks = ensemble > 0.5
             agreement = np.mean([dice_scores(m, masks) for m in fold_masks], axis=0)
@@ -162,6 +184,7 @@ class SegmenterService:
             del x_t, total, fold_masks, ensemble, masks
         t3 = time.perf_counter()
 
+        report("postprocessing", 0.0, "ET clean-up, label map, previews")
         et_raw = masks_np[ET]
         _, et_sizes = components(et_raw)
         masks_np[ET] = remove_small_components(et_raw, self.et_min_voxels)
@@ -199,7 +222,7 @@ class SegmenterService:
             "model": {"checkpoint_dir": self.checkpoint_dir, "folds": list(self.models),
                       "cross_validation_mean_dice": {f"fold{k}": round(v, 4) for k, v in self.cv_scores.items()},
                       "patch_size": self.cfg["patch_size"], "sliding_window_overlap": self.cfg["sw_overlap"]},
-            "timing_seconds": {"load": round(t1 - t0, 2), "preprocess": round(t2 - t1, 2),
+            "timing_seconds": {"load": round(study["load_seconds"], 2), "preprocess": round(t2 - t1, 2),
                                "inference": round(t3 - t2, 2), "postprocess_and_encode": round(t4 - t3, 2)},
             "warnings": warnings,
         }

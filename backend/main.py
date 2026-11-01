@@ -14,10 +14,11 @@ from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
 
 from backend.config import Settings
-from backend.routers import classification, health, segmentation
+from backend.routers import classification, health, results, segmentation
 from backend.services.classifier import ClassifierService
 from backend.services.device import resolve_device
 from backend.services.errors import ApiError
+from backend.services.jobs import JobStore
 from backend.services.segmenter import SegmenterService
 
 log = logging.getLogger("backend")
@@ -40,8 +41,10 @@ def create_app(settings=None):
         app.state.segmenter = SegmenterService(settings.segmentation_dir, settings.segmentation_folds, device,
                                                settings.et_min_voxels, settings.result_cache_size,
                                                settings.max_volume_mb)
+        app.state.jobs = JobStore(keep=settings.result_cache_size)
         log.info("models loaded")
         yield
+        app.state.jobs.shutdown()
         app.state.classifier = app.state.segmenter = None
 
     app = FastAPI(title="Brain Tumour MRI API", version="1.0.0", lifespan=lifespan,
@@ -70,7 +73,7 @@ def create_app(settings=None):
         log.exception("unhandled error on %s", request.url.path)
         return JSONResponse(status_code=500, content=error_body("internal_error", f"{type(exc).__name__}: {exc}"))
 
-    for router in (health.router, classification.router, segmentation.router):
+    for router in (health.router, classification.router, segmentation.router, results.router):
         app.include_router(router)
     return app
 

@@ -1,0 +1,95 @@
+/* Base styles and shared primitives. Every value comes from the tokens in
+   src/design/tokens.ts, injected as CSS variables by the root layout. */
+
+*,
+*::before,
+*::after {
+  box-sizing: border-box;
+}
+
+html {
+  -webkit-text-size-adjust: 100%;
+}
+
+body {
+  margin: 0;
+  min-height: 100vh;
+  color: var(--color-text);
+  font-family: var(--font-sans), system-ui, sans-serif;
+  font-size: var(--text-16);
+  line-height: var(--lh-16);
+  /* Faint dot grid: lab-grade precision, almost subliminal */
+  background-color: var(--color-bg);
+  background-image: radial-gradient(rgba(255, 255, 255, 0.045) 1px, transparent 1.2px);
+  background-size: var(--dot-grid) var(--dot-grid);
+  -webkit-font-smoothing: antialiased;
+}
+
+a {
+  color: inherit;
+}
+
+::selection {
+  background: var(--color-text);
+  color: var(--color-solid-text);
+}
+
+:focus-visible {
+  outline: 1px solid var(--color-text);
+  outline-offset: 3px;
+}
+
+img {
+  max-width: 100%;
+  display: block;
+}
+
+/* ---- Type helpers (the scale is fixed; use these instead of ad hoc sizes) ---- */
+
+.mono {
+  font-family: var(--font-mono), ui-monospace, monospace;
+}
+
+.label {
+  font-size: var(--text-12);
+  line-height: var(--lh-12);
+  letter-spacing: var(--track-12);
+  font-weight: 500;
+  text-transform: uppercase;
+  color: var(--color-text-muted);
+}
+
+.caption {
+  font-size: var(--text-12);
+  line-height: var(--lh-12);
+  color: var(--color-text-muted);
+}
+
+/* ---- Underline that slides in from the left on hover ---- */
+
+.u {
+  background-image: linear-gradient(currentColor, currentColor);
+  background-position: 0 100%;
+  background-repeat: no-repeat;
+  background-size: 0% 1px;
+  padding-bottom: 3px;
+  transition:
+    background-size var(--dur-underline) var(--ease),
+    color var(--dur-underline) var(--ease);
+}
+
+.u:hover,
+.u[aria-current="page"],
+a:hover > .u,
+a[aria-current="page"] > .u {
+  background-size: 100% 1px;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation: none !important;
+    transition: none !important;
+  }
+}

@@ -11,6 +11,7 @@ import gzip
 import io
 import json
 import random
+import time
 
 import nibabel as nib
 import numpy as np
@@ -91,16 +92,58 @@ def test_classify_matches_evaluation(client):
         assert body["predicted_class"] == paths[name].parent.name, name
 
 
+def wait_for_job(client, status_url, timeout=600):
+    """Poll a job until it finishes; returns (final snapshot, list of statuses seen)."""
+    seen, deadline = [], time.time() + timeout
+    while time.time() < deadline:
+        snap = client.get(status_url.replace("http://testserver", "")).json()
+        seen.append(snap["status"])
+        if snap["status"] in ("complete", "failed"):
+            return snap, seen
+        time.sleep(0.2)
+    raise AssertionError(f"job did not finish in {timeout} s")
+
+
 @pytest.fixture(scope="module")
 def segmented(client):
     case = json.loads((PROJECT_ROOT / "data" / "manifests" / "brats_5fold_splits.json").read_text())["test"][0]
     r = client.post("/api/segment?inline_mask=true", files=brats_files(case))
-    assert r.status_code == 200, r.text
-    return case, r.json()
+    assert r.status_code == 202, r.text
+    accepted = r.json()
+    assert accepted["status"] == "queued" and r.headers["location"] == accepted["status_url"]
+    job, seen = wait_for_job(client, accepted["status_url"])
+    assert job["status"] == "complete", job["error"]
+    return case, job["result"], job, seen
+
+
+def test_segment_job_reports_real_stages(segmented):
+    _, _, job, seen = segmented
+    assert seen[-1] == "complete" and "failed" not in seen
+    assert [s["name"] for s in job["stages"]] == ["preprocessing", "inference", "postprocessing"]
+    assert all(s["status"] == "complete" and s["fraction"] == 1.0 and s["seconds"] is not None for s in job["stages"])
+    assert job["progress"] == 1.0 and job["elapsed_seconds"] > 0 and job["error"] is None
+    assert job["stages"][1]["detail"] == "5 models done"
+
+
+def test_unknown_job_is_404(client):
+    r = client.get("/api/jobs/not-a-job")
+    assert r.status_code == 404 and r.json()["error"]["code"] == "job_not_found"
+
+
+def test_results_summary_matches_report_files(client):
+    body = client.get("/api/results/summary").json()
+    seg = json.loads((RESULTS / "segmentation_test.json").read_text())["test"]["ensemble"]["post_processed"]
+    assert body["segmentation"]["dice"]["mean"] == pytest.approx(seg["mean"])
+    assert body["segmentation"]["test_patients"] == 189
+    clf = body["classification"]
+    assert clf["checkpoint"] == "models/classification_crop_resdegrade_long/best.pt"
+    assert clf["accuracy"] == pytest.approx(1019 / 1037) and clf["test_images"] == 1037
+    assert clf["accuracy_ci95"][0] < clf["accuracy"] < clf["accuracy_ci95"][1]
+    assert clf["accuracy_at_128px"] == pytest.approx(0.9817, abs=1e-4)
 
 
 def test_segment_response_shape(client, segmented):
-    _, body = segmented
+    _, body, _, _ = segmented
     assert body["shape"] == [240, 240, 155] and body["spacing_mm"] == [1.0, 1.0, 1.0]
     assert set(body["regions"]) == {"WT", "TC", "ET"}
     for region in body["regions"].values():
@@ -115,7 +158,7 @@ def test_segment_response_shape(client, segmented):
 
 def test_segment_matches_evaluation(segmented):
     """Dice of the returned label map against ground truth equals the evaluated 5-fold ensemble + post-processing."""
-    case, body = segmented
+    case, body, _, _ = segmented
     mask = nib.Nifti1Image.from_bytes(gzip.decompress(base64.b64decode(body["mask_nifti_base64"])))
     labels = np.asarray(mask.dataobj)
     _, seg = load_case(RAW_DIR / "brats2021" / case)

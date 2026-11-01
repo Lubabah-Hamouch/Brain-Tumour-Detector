@@ -5,7 +5,10 @@ FastAPI service for the two trained models:
 - **`POST /api/classify`**: tumour type from one 2D MRI image, with a Grad-CAM heatmap. The model
   is the primary classifier in `reports/final_results.md`.
 - **`POST /api/segment`**: 3D tumour segmentation (WT/TC/ET) from the four BraTS MRI sequences.
-  The model is the 5-fold U-Net ensemble with enhancing-tumour post-processing.
+  The model is the 5-fold U-Net ensemble with enhancing-tumour post-processing. It runs as a
+  background job, polled with **`GET /api/jobs/{job_id}`**.
+- **`GET /api/results/summary`**: the headline held-out test results, read from
+  `reports/results/`, for the frontend's Overview.
 
 Both endpoints call the training and evaluation code in `src/` directly (preprocessing, models,
 sliding-window inference, post-processing, Grad-CAM) rather than reimplementing it.
@@ -99,7 +102,57 @@ one 3D NIfTI volume (`.nii` or `.nii.gz`).
 ```bash
 curl -F flair=@case_flair.nii.gz -F t1=@case_t1.nii.gz -F t1ce=@case_t1ce.nii.gz -F t2=@case_t2.nii.gz \
      http://localhost:8010/api/segment
+# {"job_id": "9b1e...", "status": "queued", "status_url": "http://localhost:8010/api/jobs/9b1e..."}
+curl http://localhost:8010/api/jobs/9b1e...
 ```
+
+**Asynchronous:** segmentation takes seconds on a GPU and minutes on a CPU, which is too long to
+hold an HTTP request open. The request is handled in two steps:
+
+1. **Validation, synchronous.** The four volumes are read and checked (file types, sizes, NIfTI
+   headers, matching grids) before the response. Any problem is returned immediately as a normal
+   4xx error, and no job is created.
+2. **Inference, in the background.** The response is `202 Accepted` with a `job_id`, a
+   `status_url` and a `Location` header. Poll `GET /api/jobs/{job_id}` until `status` is
+   `complete` or `failed`.
+
+Jobs run in the API process, one at a time (a single worker thread, so the GPU is never shared).
+Further jobs wait in a queue and report their `queue_position`.
+
+**Job status** (`GET /api/jobs/{job_id}`):
+
+```json
+{
+  "job_id": "9b1e...",
+  "kind": "segmentation",
+  "status": "running",
+  "queue_position": null,
+  "stage": "inference",
+  "stage_label": "Inference",
+  "stage_detail": "Model 3 of 5",
+  "progress": 0.61,
+  "stages": [
+    {"name": "preprocessing", "label": "Preprocess", "status": "complete", "fraction": 1.0, "detail": "", "seconds": 0.7},
+    {"name": "inference", "label": "Inference", "status": "running", "fraction": 0.6, "detail": "Model 3 of 5", "seconds": 2.1},
+    {"name": "postprocessing", "label": "Post-process and encode", "status": "pending", "fraction": 0.0, "detail": "", "seconds": null}
+  ],
+  "created_at": 1793530000.1,
+  "started_at": 1793530000.2,
+  "finished_at": null,
+  "elapsed_seconds": 2.9,
+  "result": null,
+  "error": null
+}
+```
+
+- **`status`:** `queued`, `running`, `complete` or `failed`.
+- **Stages:** `preprocessing`, then `inference` (which advances once per fold model), then
+  `postprocessing`. The pipeline reports each stage as it runs; nothing is simulated.
+- **`progress`:** overall 0-1, weighting each stage by its typical share of the run time.
+- **`result`:** once `complete`, the segmentation result described below.
+- **`error`:** once `failed`, `{"code", "message"}` in the same shape as every other API error.
+- **Retention:** the 16 most recent finished jobs are kept (`BT_RESULT_CACHE_SIZE`); older ones
+  answer `404 job_not_found`. Jobs are lost when the server restarts.
 
 **Why all four sequences:** the network takes the four sequences as its four input channels.
 There is no way to run it on fewer, so a request with any field missing is rejected.
@@ -127,7 +180,7 @@ preprocessing first (for example with the BraTS Toolkit or CaPTk).
 
 A 240 × 240 × 155 study takes about 5-6 s on an RTX 4060 Laptop GPU, 3.5 s of which is inference.
 
-**Response:**
+**Result** (the job's `result` field):
 
 ```json
 {
@@ -157,8 +210,8 @@ A 240 × 240 × 155 study takes about 5-6 s on an RTX 4060 Laptop GPU, 3.5 s of 
   0, 1 (necrotic core), 2 (edema) and 4 (enhancing tumour). It overlays the input directly in any
   NIfTI viewer, such as NiiVue, Papaya or ITK-SNAP.
 - **Size:** about 20-30 KB for a BraTS study. The uncompressed array is 8.9 MB.
-- **Retrieval:** download it from `mask_url`, or add `?inline_mask=true` to receive it base64-encoded
-  in the JSON.
+- **Retrieval:** download it from `mask_url`, or add `?inline_mask=true` to the `POST` to receive it
+  base64-encoded in the job result.
 - **Retention:** downloads stay available for the 16 most recent results and are lost when the
   server restarts.
 
@@ -188,6 +241,19 @@ predicted as ET but not TC therefore counts towards TC in the label map. This ch
 Each shows FLAIR with the labels overlaid: red for necrotic core, green for edema, yellow for
 enhancing tumour. They are for quick display only; render the NIfTI for anything interactive.
 
+## `GET /api/results/summary`
+
+The headline held-out test results, computed from the evaluation reports rather than hard-coded:
+
+- **Segmentation:** ensemble Dice after post-processing (mean, WT, TC, ET) and the number of test
+  patients, from `segmentation_test.json`.
+- **Classification:** accuracy with a 95% Wilson interval, macro F1 and the number of test images,
+  from the `classification_test*.json` report of the checkpoint the API is serving, plus the
+  accuracy on images shrunk to 128 px from `format_stress_test.json`.
+
+The response lists the report files it used under `sources`. If a report is missing it returns
+`503 results_unavailable`.
+
 ## Errors
 
 Every error has the same shape and an HTTP status that matches the problem:
@@ -198,17 +264,20 @@ Every error has the same shape and an HTTP status that matches the problem:
 
 | Status | Codes |
 |---|---|
-| 404 | `result_not_found` |
+| 404 | `result_not_found`, `job_not_found` |
 | 413 | `file_too_large` |
 | 415 | `unsupported_file_type` |
 | 422 | `missing_fields`, `empty_file`, `unreadable_image`, `image_too_small`, `corrupt_nifti`, `not_3d`, `non_finite_values`, `shape_mismatch`, `spacing_mismatch`, `empty_volume`, `invalid_request` |
-| 503 | `model_unavailable` |
+| 503 | `model_unavailable`, `results_unavailable` |
 
 ## Tests
 
 ```bash
-pytest tests/test_api.py
+pytest tests/test_api.py tests/test_jobs.py
 ```
+
+`tests/test_jobs.py` covers the job queue on its own, without models: progress reporting, results,
+failures, serial execution and eviction.
 
 The tests need the checkpoints and local datasets; they are skipped without them. They check:
 
@@ -218,4 +287,6 @@ The tests need the checkpoints and local datasets; they are skipped without them
 - that 40 sampled correctly classified test images stay correct;
 - that the segmentation label map for a held-out BraTS test case gives the recorded ensemble Dice
   (±0.005);
+- that a segmentation job passes through the real stages in order;
+- that the results summary matches the report files;
 - every error path listed above.

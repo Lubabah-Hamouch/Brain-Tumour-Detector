@@ -1,0 +1,235 @@
+/* ---- Hero: text column and the hero visual share top and bottom edges ---- */
+
+.hero {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: stretch;
+  gap: 64px;
+  padding: 112px var(--page-margin) 96px;
+  background: linear-gradient(180deg, rgba(255, 255, 255, 0.025), rgba(255, 255, 255, 0) 70%);
+}
+
+.heroText {
+  flex: 5 1 420px;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  justify-content: space-between;
+  gap: 48px;
+}
+
+.stack28 {
+  display: flex;
+  flex-direction: column;
+  gap: 28px;
+}
+
+.stack32 {
+  display: flex;
+  flex-direction: column;
+  gap: 32px;
+}
+
+.stack28 p {
+  margin: 0;
+}
+
+.headline {
+  margin: 0;
+  max-width: 580px;
+  font-weight: 700;
+  font-size: var(--text-64);
+  line-height: var(--lh-64);
+  letter-spacing: var(--track-64);
+}
+
+.lead {
+  margin: 0;
+  max-width: 460px;
+  font-size: var(--text-16);
+  line-height: var(--lh-16);
+  color: var(--color-text-secondary);
+}
+
+.actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 14px;
+}
+
+/* ---- Headline results ---- */
+
+.results {
+  padding: var(--section-gap) var(--page-margin) 0;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 96px 64px;
+}
+
+.resultColumn {
+  flex: 1 1 480px;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 24px;
+}
+
+.resultColumn p {
+  margin: 0;
+}
+
+.rows {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  padding-top: 8px;
+}
+
+.facts {
+  margin: 0;
+  padding-top: 8px;
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  gap: 12px 16px;
+  font-size: var(--text-14);
+  color: var(--color-text-secondary);
+}
+
+.facts dd {
+  margin: 0;
+  font-size: var(--text-12);
+  color: var(--color-text);
+}
+
+.placeholderNumber {
+  display: block;
+  height: 115px;
+  max-width: 420px;
+  background: linear-gradient(90deg, rgba(255, 255, 255, 0.03), rgba(255, 255, 255, 0.06), rgba(255, 255, 255, 0.03));
+}
+
+.unavailable {
+  margin: 0;
+  max-width: 720px;
+  font-size: var(--text-14);
+  line-height: var(--lh-14);
+  color: var(--color-text-secondary);
+}
+
+/* ---- Index and pipeline ---- */
+
+.section {
+  padding: var(--section-gap) var(--page-margin) 0;
+}
+
+.sectionLabel {
+  margin: 0 0 28px;
+}
+
+.indexRow {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  gap: 12px 40px;
+  padding: 40px 0;
+  border-top: 1px solid var(--color-hairline);
+  text-decoration: none;
+  color: var(--color-text);
+  transition: border-color var(--dur-underline) var(--ease);
+}
+
+.indexRow:hover {
+  border-top-color: #55595e;
+}
+
+.indexRow:hover .indexTitle :global(.u) {
+  background-size: 100% 1px;
+}
+
+.indexNumber {
+  width: 40px;
+  font-size: var(--text-12);
+  color: var(--color-text-muted);
+}
+
+.indexTitle {
+  flex: 1 1 420px;
+  font-weight: 700;
+  font-size: var(--text-40);
+  line-height: var(--lh-40);
+  letter-spacing: var(--track-40);
+}
+
+.indexTitle :global(.u) {
+  padding-bottom: 6px;
+}
+
+.indexBody {
+  flex: 0 1 380px;
+  font-size: var(--text-14);
+  line-height: var(--lh-14);
+  color: var(--color-text-secondary);
+}
+
+.rule {
+  border-top: 1px solid var(--color-hairline);
+}
+
+.tableScroll {
+  overflow-x: auto;
+}
+
+.table {
+  width: 100%;
+  min-width: 900px;
+  border-collapse: collapse;
+  font-size: var(--text-14);
+  line-height: var(--lh-14);
+  color: var(--color-text-secondary);
+}
+
+.table th,
+.table td {
+  padding: 18px 24px 18px 0;
+  text-align: left;
+  vertical-align: top;
+}
+
+.table thead th {
+  padding-top: 0;
+  padding-bottom: 14px;
+}
+
+.table tbody tr {
+  border-top: 1px solid var(--color-hairline);
+}
+
+.table tbody tr:last-child {
+  border-bottom: 1px solid var(--color-hairline);
+}
+
+.rowName {
+  width: 96px;
+  color: var(--color-text) !important;
+  font-weight: 600;
+}
+
+@media (max-width: 640px) {
+  .hero,
+  .results,
+  .section {
+    padding-left: 20px;
+    padding-right: 20px;
+  }
+  .hero {
+    padding-top: 56px;
+  }
+  .headline {
+    font-size: var(--text-40);
+    line-height: var(--lh-40);
+    letter-spacing: var(--track-40);
+  }
+  .indexTitle {
+    font-size: var(--text-28);
+  }
+}

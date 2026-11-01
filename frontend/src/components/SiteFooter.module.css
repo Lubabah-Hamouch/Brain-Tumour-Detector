@@ -1,0 +1,23 @@
+.footer {
+  margin-top: var(--section-gap);
+  padding: 32px var(--page-margin) 40px;
+  border-top: 1px solid var(--color-hairline);
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: space-between;
+  gap: 16px;
+  font-size: var(--text-12);
+  line-height: var(--lh-12);
+  color: var(--color-text-muted);
+}
+
+.footer p {
+  margin: 0;
+  max-width: 620px;
+}
+
+@media (max-width: 640px) {
+  .footer {
+    padding: 28px 20px 32px;
+  }
+}

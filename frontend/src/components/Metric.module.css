@@ -1,0 +1,64 @@
+.hero {
+  display: flex;
+  flex-direction: column;
+  gap: 24px;
+}
+
+.heroValue {
+  font-weight: 300;
+  font-size: var(--text-128);
+  line-height: var(--lh-128);
+  letter-spacing: var(--track-128);
+  font-variant-numeric: tabular-nums;
+}
+
+.unit {
+  font-size: var(--text-64);
+  color: var(--color-text-muted);
+}
+
+.bar,
+.barStrong {
+  position: relative;
+  height: 1px;
+  background: var(--color-bar-track);
+}
+
+.barStrong {
+  height: 2px;
+}
+
+.fill {
+  position: absolute;
+  inset: 0 auto 0 0;
+  background: var(--color-bar-muted);
+}
+
+.barStrong .fill {
+  background: var(--color-bar-fill);
+}
+
+.row {
+  display: grid;
+  grid-template-columns: 40px minmax(0, 1fr) 64px;
+  gap: 12px 16px;
+  align-items: center;
+  font-family: var(--font-mono), monospace;
+  font-size: var(--text-12);
+  color: var(--color-text-secondary);
+}
+
+.rowValue {
+  text-align: right;
+  color: var(--color-text);
+  font-variant-numeric: tabular-nums;
+}
+
+@media (max-width: 640px) {
+  .heroValue {
+    font-size: var(--text-64);
+  }
+  .unit {
+    font-size: var(--text-40);
+  }
+}

@@ -6,7 +6,7 @@ Work in progress. Full documentation to follow.
 
 ```
 backend/     FastAPI service for both models (see backend/README.md)
-frontend/    Web client (planned)
+frontend/    Next.js web client (see frontend/README.md)
 data/        Local datasets, gitignored (see data/README.md)
 models/      Trained weights, gitignored
 notebooks/   Exploration only
@@ -38,3 +38,15 @@ uvicorn backend.main:app --port 8010    # docs at http://localhost:8010/docs
 ```
 
 Endpoints, input requirements and response formats are documented in `backend/README.md`.
+
+## Frontend
+
+With the API running:
+
+```powershell
+cd frontend
+npm install
+npm run dev                             # http://localhost:3000
+```
+
+See `frontend/README.md` for the design system and the hero image.
