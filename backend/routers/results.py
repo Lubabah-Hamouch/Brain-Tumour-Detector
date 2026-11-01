@@ -5,6 +5,7 @@ classification numbers from the classification_test_*.json whose checkpoint is t
 API is serving, so the page always describes the model that answers requests.
 """
 import json
+from collections import Counter
 
 from fastapi import APIRouter, Request
 
@@ -35,6 +36,8 @@ def summary(classifier_checkpoint):
     clf = _load(clf_file)
     accuracy, n = clf["test"]["test/accuracy"], clf["test_images"]
     stress = _load("format_stress_test.json")["models"].get(served, {})
+    # Test errors per unordered class pair (glioma read as meningioma and the reverse count together).
+    pairs = Counter(tuple(sorted((e["true"], e["predicted"]))) for e in clf["misclassified"])
     return {
         "segmentation": {
             "test_patients": seg["test_cases"],
@@ -49,6 +52,10 @@ def summary(classifier_checkpoint):
             "accuracy_ci95": wilson(accuracy, n),
             "macro_f1": clf["test"]["test/macro_f1"],
             "accuracy_at_128px": stress.get("tiny_square", {}).get("accuracy"),
+            "checkpoint_epoch": clf["checkpoint_epoch"],
+            "test_errors": len(clf["misclassified"]),
+            "confusions": [{"classes": list(pair), "errors": count}
+                           for pair, count in sorted(pairs.items(), key=lambda kv: (-kv[1], kv[0]))],
         },
         "sources": ["reports/results/segmentation_test.json", f"reports/results/{clf_file}",
                     "reports/results/format_stress_test.json"],

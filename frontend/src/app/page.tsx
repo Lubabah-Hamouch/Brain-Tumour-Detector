@@ -4,7 +4,7 @@ import { Suspense } from "react";
 import { ButtonLink } from "@/components/ButtonLink";
 import { HeroVisual } from "@/components/HeroVisual";
 import { HeroMetric, MetricRow } from "@/components/Metric";
-import { ApiUnavailable, getResultsSummary } from "@/lib/api";
+import { ApiError, ApiUnavailable, getResultsSummary } from "@/lib/api";
 
 import styles from "./page.module.css";
 
@@ -127,7 +127,7 @@ async function HeadlineResults() {
   try {
     summary = await getResultsSummary();
   } catch (error) {
-    if (!(error instanceof ApiUnavailable)) throw error;
+    if (!(error instanceof ApiUnavailable || error instanceof ApiError)) throw error;
     return (
       <section aria-label="Headline results" className={styles.results}>
         <p className={styles.unavailable}>

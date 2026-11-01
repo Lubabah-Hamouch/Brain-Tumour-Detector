@@ -37,7 +37,7 @@ def create_app(settings=None):
         app.state.settings, app.state.device = settings, device
         log.info("loading models on %s", device)
         # Models load once at startup and stay in memory; a missing checkpoint is a startup error.
-        app.state.classifier = ClassifierService(settings.classifier_checkpoint, device)
+        app.state.classifier = ClassifierService(settings.classifier_checkpoint, device, settings.result_cache_size)
         app.state.segmenter = SegmenterService(settings.segmentation_dir, settings.segmentation_folds, device,
                                                settings.et_min_voxels, settings.result_cache_size,
                                                settings.max_volume_mb)

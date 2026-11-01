@@ -34,3 +34,20 @@
   color: var(--color-text-strong);
   box-shadow: inset 0 0 0 1px rgba(236, 237, 239, 0.6);
 }
+
+/* <button> variants (Button.tsx) share these styles. */
+button.button {
+  border: 0;
+  font-family: inherit;
+  cursor: pointer;
+}
+
+.block {
+  width: 100%;
+}
+
+.solid:disabled {
+  background-color: var(--color-control-disabled);
+  color: var(--color-text-disabled);
+  cursor: not-allowed;
+}

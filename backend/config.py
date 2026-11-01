@@ -9,7 +9,8 @@
     BT_CORS_ORIGINS           comma-separated; default common local dev origins
     BT_MAX_IMAGE_MB           classification upload limit, default 20
     BT_MAX_VOLUME_MB          per-modality NIfTI upload limit, default 200
-    BT_RESULT_CACHE_SIZE      segmentation masks kept for download, default 16
+    BT_RESULT_CACHE_SIZE      recent results kept for download (segmentation masks, classification
+                              reports, finished jobs), default 16
 """
 import json
 import os

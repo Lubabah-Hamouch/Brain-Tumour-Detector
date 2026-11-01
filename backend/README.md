@@ -3,7 +3,9 @@
 FastAPI service for the two trained models:
 
 - **`POST /api/classify`**: tumour type from one 2D MRI image, with a Grad-CAM heatmap. The model
-  is the primary classifier in `reports/final_results.md`.
+  is the primary classifier in `reports/final_results.md`. Each result can be downloaded as one
+  PNG from **`GET /api/classify/{result_id}/report.png`**.
+- **`GET /api/samples`**: three held-out test images for trying the classifier without a scan.
 - **`POST /api/segment`**: 3D tumour segmentation (WT/TC/ET) from the four BraTS MRI sequences.
   The model is the 5-fold U-Net ensemble with enhancing-tumour post-processing. It runs as a
   background job, polled with **`GET /api/jobs/{job_id}`**.
@@ -42,7 +44,7 @@ Settings come from environment variables:
 | `BT_ET_MIN_VOXELS` | tuned value (50) | enhancing-tumour component size threshold |
 | `BT_CORS_ORIGINS` | `localhost` / `127.0.0.1` on ports 3000 and 5173 | allowed frontend origins, comma-separated |
 | `BT_MAX_IMAGE_MB` / `BT_MAX_VOLUME_MB` | 20 / 200 | upload limits |
-| `BT_RESULT_CACHE_SIZE` | 16 | segmentation masks kept for download |
+| `BT_RESULT_CACHE_SIZE` | 16 | recent results kept for download: segmentation masks, classification reports, finished jobs |
 
 The default `BT_ET_MIN_VOXELS` is read from `reports/results/segmentation_test.json`, where it was
 tuned on validation data.
@@ -73,26 +75,57 @@ ImageNet-normalised. This is exactly what validation and test images received.
 
 ```json
 {
+  "result_id": "1d006ce7...",
+  "report_url": "http://localhost:8010/api/classify/1d006ce7.../report.png",
   "predicted_class": "pituitary",
   "confidence": 0.9999,
   "probabilities": {"glioma": 0.0, "meningioma": 0.0, "notumor": 0.0001, "pituitary": 0.9999},
-  "image": {"width": 512, "height": 512, "mode": "L"},
+  "image": {"width": 512, "height": 512, "mode": "L", "grayscale": true},
   "letterbox": {"size": 384, "scale": 0.75, "offset_x": 0, "offset_y": 0, "resized_width": 384, "resized_height": 384},
-  "gradcam": {"target_class": "pituitary", "heatmap_png": "<base64>", "overlay_png": "<base64>", "resolution_note": "..."},
+  "model_input_png": "<base64>",
+  "gradcam": {"target_class": "pituitary", "heatmap_png": "<base64>", "heat_png": "<base64>", "overlay_png": "<base64>", "resolution_note": "..."},
   "model": {"checkpoint": "models/classification_crop_resdegrade_long/best.pt", "checkpoint_epoch": 22, "validation": {}},
   "warnings": []
 }
 ```
 
-- **Grad-CAM images:** both are 384 × 384 PNGs in the coordinates of the letterboxed model input.
-  - `heatmap_png` is 8-bit grayscale, so a frontend can apply its own colormap.
-  - `overlay_png` is ready to display.
+- **Model input:** `model_input_png` is the letterboxed 384 × 384 grayscale image the model saw.
+- **Grad-CAM images:** all are 384 × 384 PNGs in the coordinates of the letterboxed model input.
+  - `heatmap_png` is 8-bit grayscale, so a client can apply its own colormap.
+  - `heat_png` is RGBA on the web client's red ramp (dark red to pale pink), transparent where
+    attribution is weak. Lay it over `model_input_png`; the web client does this with an opacity
+    slider.
+  - `overlay_png` is a ready-made blend with the jet colormap, as in the error-inspection figures.
 - **Mapping back to the original image:** use the `letterbox` fields. A heatmap pixel (u, v)
   corresponds to original-image pixel ((u − offset_x) / scale, (v − offset_y) / scale).
 - **Resolution:** the heatmap comes from a 12 × 12 feature map, so it is coarse.
 
 **Scope:** the model was trained on single 2D slices, mostly contrast-enhanced T1. T2, FLAIR and CT
 images are poorly covered (see `reports/final_results.md`).
+
+## `GET /api/classify/{result_id}/report.png`
+
+One PNG of a classification result, for saving or sharing: the file name and size, the model input
+with the Grad-CAM overlay, the prediction with its probability, all four probabilities as bars, and
+the model, export date and research-use notice.
+
+- **Size:** 2400 × 3000 (a 1200 × 1500 layout at 2×), about 0.8 MB.
+- **Rendered on the server** with Pillow when first requested, then kept with the result. It uses the
+  web client's fonts and colours, so it matches the screen in every browser. The fonts (Geist and
+  JetBrains Mono, SIL Open Font License) are bundled in `backend/assets/fonts/` with their licences.
+- **Retention:** like segmentation masks, the 16 most recent results are kept in memory
+  (`BT_RESULT_CACHE_SIZE`); older ones answer `404 result_not_found`.
+
+## `GET /api/samples`
+
+Three held-out test images, so the classifier can be tried without a scan of one's own:
+`Tr-me_1065.jpg` (meningioma), `Te-pi_102.jpg` (pituitary) and `Te-gl_350.jpg` (glioma, one of the
+recorded test errors). Each entry gives the true class, the size, whether the served classifier gets
+it wrong on the test set (`known_error`, from the test report) and a `url`.
+
+`GET /api/samples/{name}` returns the image. Only these three files are served, read from the local
+cleaned test set (`data/processed/`); any other name answers `404 sample_not_found`. The images are
+never committed to the repository.
 
 ## `POST /api/segment`
 
@@ -249,7 +282,9 @@ The headline held-out test results, computed from the evaluation reports rather 
   patients, from `segmentation_test.json`.
 - **Classification:** accuracy with a 95% Wilson interval, macro F1 and the number of test images,
   from the `classification_test*.json` report of the checkpoint the API is serving, plus the
-  accuracy on images shrunk to 128 px from `format_stress_test.json`.
+  accuracy on images shrunk to 128 px from `format_stress_test.json`. Also the number of test
+  errors and how many fall on each pair of classes (`confusions`), used to put a prediction's
+  runner-up in context.
 
 The response lists the report files it used under `sources`. If a report is missing it returns
 `503 results_unavailable`.
@@ -264,7 +299,7 @@ Every error has the same shape and an HTTP status that matches the problem:
 
 | Status | Codes |
 |---|---|
-| 404 | `result_not_found`, `job_not_found` |
+| 404 | `result_not_found`, `job_not_found`, `sample_not_found` |
 | 413 | `file_too_large` |
 | 415 | `unsupported_file_type` |
 | 422 | `missing_fields`, `empty_file`, `unreadable_image`, `image_too_small`, `corrupt_nifti`, `not_3d`, `non_finite_values`, `shape_mismatch`, `spacing_mismatch`, `empty_volume`, `invalid_request` |
@@ -288,5 +323,6 @@ The tests need the checkpoints and local datasets; they are skipped without them
 - that the segmentation label map for a held-out BraTS test case gives the recorded ensemble Dice
   (±0.005);
 - that a segmentation job passes through the real stages in order;
+- that the classification report renders, and that only the listed samples are served;
 - that the results summary matches the report files;
 - every error path listed above.

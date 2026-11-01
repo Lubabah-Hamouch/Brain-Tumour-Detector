@@ -7,7 +7,7 @@ the FastAPI backend in `../backend`.
 |---|---|
 | `/` Overview | built: headline test results from `GET /api/results/summary`, hero render, index, pipeline |
 | `/segment` | placeholder; next to build, on `POST /api/segment` + `GET /api/jobs/{id}` |
-| `/classify` | placeholder; built on `POST /api/classify` |
+| `/classify` | built: upload or test-set sample → checked preview → prediction with Grad-CAM viewer and PNG download (`POST /api/classify`, `GET /api/samples`) |
 | `/model-card` | placeholder |
 
 ## Running locally
@@ -54,11 +54,13 @@ src/
     globals.css         base styles and shared primitives (.label, .mono, .caption, .u)
     page.tsx            Overview
     segment/ classify/ model-card/
-  components/           SiteHeader, SiteFooter, ButtonLink, Metric, HeroVisual, PlannedScreen
+  components/           SiteHeader, SiteFooter, ButtonLink, Button, Metric, HeroVisual, PlannedScreen
+    classify/           Classify screen: upload view, result view, shared styles
   design/
     tokens.ts           the design system: colour, type scale, motion, spacing
     useEntryProgress.ts eased entry animation (count-ups, bars), honours reduced motion
   lib/api.ts            typed API client
+  lib/imageCheck.ts     browser-side upload checks (format by content, size, dimensions)
 ```
 
 ## Design system

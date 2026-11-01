@@ -8,10 +8,26 @@ from PIL import Image
 
 
 def png_base64(array):
-    """uint8 (H, W) or (H, W, 3) array -> base64 PNG string."""
+    """uint8 (H, W), (H, W, 3) or (H, W, 4) array -> base64 PNG string."""
     buffer = io.BytesIO()
     Image.fromarray(array).save(buffer, format="PNG", optimize=True)
     return base64.b64encode(buffer.getvalue()).decode("ascii")
+
+
+# Finding colours of the web client's design system (frontend/src/design/tokens.ts):
+# edema, necrotic core, enhancing. Grad-CAM is drawn on the same ramp, dark red to pale pink.
+HEAT_STOPS = np.array([[122, 17, 27], [215, 38, 61], [255, 194, 202]], dtype=np.float32)
+
+
+def heat_rgba(heat):
+    """[0, 1] heatmap -> uint8 RGBA on the red ramp, transparent where attribution is weak (below 0.15)."""
+    h = np.clip(heat, 0, 1).astype(np.float32)
+    t = h * (len(HEAT_STOPS) - 1)
+    lo = np.clip(np.floor(t).astype(int), 0, len(HEAT_STOPS) - 2)
+    frac = (t - lo)[..., None]
+    rgb = HEAT_STOPS[lo] * (1 - frac) + HEAT_STOPS[lo + 1] * frac
+    alpha = np.clip((h - 0.15) / 0.85, 0, 1) ** 0.9 * 0.92
+    return np.dstack([rgb, 255 * alpha]).round().astype(np.uint8)
 
 
 def heatmap_overlay(gray, heat, alpha=0.4):

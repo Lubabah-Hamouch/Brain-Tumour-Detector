@@ -16,9 +16,11 @@ export const color = {
   hairline: "#24262A",
   hairlineStrong: "#3A3D42",
   control: "#2E3034",
+  controlDisabled: "#1E2023",
   barTrack: "#2A2C30",
   barFill: "#E4E6E8",
   barMuted: "#9EA2A7",
+  barDim: "#6A6E74",
   // Text, from loudest to quietest
   textStrong: "#FFFFFF",
   text: "#ECEDEF",

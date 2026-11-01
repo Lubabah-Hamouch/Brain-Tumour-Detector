@@ -75,6 +75,48 @@ def test_classify_response_shape(client):
     assert heat.size == (384, 384) and heat.mode == "L"
     lb = body["letterbox"]
     assert lb["resized_width"] == 384 or lb["resized_height"] == 384
+    model_input = Image.open(io.BytesIO(base64.b64decode(body["model_input_png"])))
+    assert model_input.size == (384, 384) and model_input.mode == "L"
+    red = Image.open(io.BytesIO(base64.b64decode(body["gradcam"]["heat_png"])))
+    assert red.size == (384, 384) and red.mode == "RGBA"
+    assert body["image"]["grayscale"] is True
+    assert body["report_url"].endswith(f"/api/classify/{body['result_id']}/report.png")
+
+
+def test_classify_report_png(client):
+    """The downloadable report renders for a recent result, at 2x the 1200 x 1500 layout."""
+    body = upload_image(client, CLEAN_DIR / "test" / "meningioma" / "Tr-me_1065.jpg").json()
+    r = client.get(body["report_url"].replace("http://testserver", ""))
+    assert r.status_code == 200 and r.headers["content-type"] == "image/png"
+    assert r.headers["content-disposition"].startswith("attachment;")
+    report = Image.open(io.BytesIO(r.content))
+    assert report.size == (2400, 3000)
+    # The prediction bar is drawn in the finding red; the rest of the page is greyscale or the heatmap.
+    assert (np.asarray(report.convert("RGB")) == (215, 38, 61)).all(axis=-1).any()
+
+
+def test_classify_report_unknown_is_404(client):
+    r = client.get("/api/classify/not-a-result/report.png")
+    assert r.status_code == 404 and r.json()["error"]["code"] == "result_not_found"
+
+
+def test_samples_are_listed_and_served(client):
+    samples = client.get("/api/samples").json()
+    assert [s["name"] for s in samples] == ["Tr-me_1065.jpg", "Te-pi_102.jpg", "Te-gl_350.jpg"]
+    recorded = json.loads((RESULTS / "classification_test_crop_resdegrade_long.json").read_text())
+    errors = {e["file"] for e in recorded["misclassified"]}
+    for s in samples:
+        path = CLEAN_DIR / "test" / s["true_class"] / s["name"]
+        assert s["known_error"] == (s["name"] in errors)
+        r = client.get(s["url"].replace("http://testserver", ""))
+        assert r.status_code == 200 and r.content == path.read_bytes()
+    assert [s["name"] for s in samples if s["known_error"]] == ["Te-gl_350.jpg"]
+
+
+@pytest.mark.parametrize("name", ["Te-gl_106.jpg", "..%2F..%2F.env", "missing.jpg"])
+def test_only_listed_samples_are_served(client, name):
+    r = client.get(f"/api/samples/{name}")
+    assert r.status_code == 404
 
 
 def test_classify_matches_evaluation(client):
@@ -140,6 +182,8 @@ def test_results_summary_matches_report_files(client):
     assert clf["accuracy"] == pytest.approx(1019 / 1037) and clf["test_images"] == 1037
     assert clf["accuracy_ci95"][0] < clf["accuracy"] < clf["accuracy_ci95"][1]
     assert clf["accuracy_at_128px"] == pytest.approx(0.9817, abs=1e-4)
+    assert clf["test_errors"] == 18 == sum(c["errors"] for c in clf["confusions"])
+    assert {"classes": ["glioma", "meningioma"], "errors": 5} in clf["confusions"]
 
 
 def test_segment_response_shape(client, segmented):

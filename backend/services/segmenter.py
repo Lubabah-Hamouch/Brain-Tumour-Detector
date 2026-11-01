@@ -17,14 +17,13 @@ import gzip
 import tempfile
 import threading
 import time
-import uuid
-from collections import OrderedDict
 from pathlib import Path
 
 import nibabel as nib
 import numpy as np
 import torch
 
+from backend.services.cache import ResultCache
 from backend.services.errors import ApiError, relative_name
 from backend.services.imaging import label_overlay, png_base64
 from src.data.segmentation_preprocess import ALL_MODALITIES, load_modality, preprocess_image, uncrop
@@ -48,27 +47,6 @@ def nested_to_brats(regions):
 def brats_regions(labels):
     """BraTS label map -> {region: bool mask}, the inverse used for volumes and statistics."""
     return {"WT": labels > 0, "TC": np.isin(labels, (1, 4)), "ET": labels == 4}
-
-
-class ResultCache:
-    """The most recent label maps (gzipped NIfTI bytes), kept in memory for download."""
-
-    def __init__(self, size):
-        self.size = size
-        self._items = OrderedDict()
-        self._lock = threading.Lock()
-
-    def put(self, data):
-        key = uuid.uuid4().hex
-        with self._lock:
-            self._items[key] = data
-            while len(self._items) > self.size:
-                self._items.popitem(last=False)
-        return key
-
-    def get(self, key):
-        with self._lock:
-            return self._items.get(key)
 
 
 def read_nifti(name, data, max_mb):
