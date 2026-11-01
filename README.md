@@ -227,6 +227,14 @@ The integration tests need the trained checkpoints and the local data, and are s
 No images, volumes, patient-derived renders or model weights are committed. The repository holds
 the code, the split manifests and the evaluation results.
 
+## License
+
+The code in this repository is released under the [MIT License](LICENSE).
+
+The licence covers this repository's own contents only. It does not extend to the BraTS 2021 data
+or the Brain Tumor MRI Dataset, or to anything derived from them, such as preprocessed volumes,
+renders or weights trained on them. Those remain under each dataset's own terms, described above.
+
 ## Repository layout
 
 ```
