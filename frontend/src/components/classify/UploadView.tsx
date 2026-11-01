@@ -4,10 +4,11 @@ import Image from "next/image";
 import { useId, useRef, useState, type DragEvent } from "react";
 
 import { Button } from "@/components/Button";
+import { CheckIcon, ErrorIcon } from "@/components/icons";
 import type { Sample } from "@/lib/api";
 import { formatBytes, MAX_IMAGE_MB, MIN_SIDE } from "@/lib/imageCheck";
 
-import styles from "./Classify.module.css";
+import styles from "@/components/workspace/Workspace.module.css";
 import { SampleNote } from "./SampleNote";
 import type { Problem, Selected } from "./types";
 
@@ -100,11 +101,7 @@ export function UploadView(props: Props) {
           <span className={styles.fileText}>
             <span className={`mono ${styles.fileName}`}>{info?.name ?? problem?.name ?? "No file yet"}</span>
             <span className={styles.fileStatus}>
-              {info && (
-                <svg width="14" height="14" viewBox="0 0 14 14" aria-hidden="true">
-                  <path d="M2.5 7.5l3 3 6-7" fill="none" stroke="currentColor" strokeWidth="1.5" />
-                </svg>
-              )}
+              {info && <CheckIcon />}
               {problem && !info && <ErrorIcon />}
               <span>{status}</span>
             </span>
@@ -179,14 +176,5 @@ export function UploadView(props: Props) {
         </p>
       </aside>
     </div>
-  );
-}
-
-export function ErrorIcon() {
-  return (
-    <svg width="14" height="14" viewBox="0 0 14 14" aria-hidden="true">
-      <circle cx="7" cy="7" r="6" fill="none" stroke="currentColor" strokeWidth="1.4" />
-      <path d="M7 3.8v4M7 9.6v0.6" stroke="currentColor" strokeWidth="1.4" />
-    </svg>
   );
 }

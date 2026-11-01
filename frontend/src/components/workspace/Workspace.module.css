@@ -1,4 +1,4 @@
-/* Classification screen: work area on the left, controls and results in the right rail. */
+/* Workspace screens (Classify, Segment): work area on the left, controls and results in the right rail. */
 
 .screen {
   display: grid;

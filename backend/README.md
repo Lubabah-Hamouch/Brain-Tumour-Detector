@@ -8,7 +8,10 @@ FastAPI service for the two trained models:
 - **`GET /api/samples`**: three held-out test images for trying the classifier without a scan.
 - **`POST /api/segment`**: 3D tumour segmentation (WT/TC/ET) from the four BraTS MRI sequences.
   The model is the 5-fold U-Net ensemble with enhancing-tumour post-processing. It runs as a
-  background job, polled with **`GET /api/jobs/{job_id}`**.
+  background job, polled with **`GET /api/jobs/{job_id}`**. Each result has viewer slices
+  (**`GET /api/segment/{result_id}/slices/{plane}/{layer}.png`**), the label map download and a PNG
+  report (**`GET /api/segment/{result_id}/report.png`**).
+- **`GET /api/sample-study`**: a held-out BraTS test study for trying the segmentation without data.
 - **`GET /api/results/summary`**: the headline held-out test results, read from
   `reports/results/`, for the frontend's Overview.
 
@@ -44,7 +47,7 @@ Settings come from environment variables:
 | `BT_ET_MIN_VOXELS` | tuned value (50) | enhancing-tumour component size threshold |
 | `BT_CORS_ORIGINS` | `localhost` / `127.0.0.1` on ports 3000 and 5173 | allowed frontend origins, comma-separated |
 | `BT_MAX_IMAGE_MB` / `BT_MAX_VOLUME_MB` | 20 / 200 | upload limits |
-| `BT_RESULT_CACHE_SIZE` | 16 | recent results kept for download: segmentation masks, classification reports, finished jobs |
+| `BT_RESULT_CACHE_SIZE` | 16 | recent results kept for download: segmentation masks and viewer slices, classification reports, finished jobs |
 
 The default `BT_ET_MIN_VOXELS` is read from `reports/results/segmentation_test.json`, where it was
 tuned on validation data.
@@ -218,7 +221,10 @@ A 240 × 240 × 155 study takes about 5-6 s on an RTX 4060 Laptop GPU, 3.5 s of 
 ```json
 {
   "result_id": "3f0c...",
+  "study": "BraTS2021_00003",
+  "files": {"flair": "BraTS2021_00003_flair.nii.gz", "t1": "...", "t1ce": "...", "t2": "..."},
   "mask_url": "http://localhost:8010/api/segment/3f0c.../mask.nii.gz",
+  "report_url": "http://localhost:8010/api/segment/3f0c.../report.png",
   "mask_nifti_base64": null,
   "labels": {"necrotic_core": 1, "edema": 2, "enhancing_tumour": 4},
   "regions": {
@@ -229,6 +235,12 @@ A 240 × 240 × 155 study takes about 5-6 s on an RTX 4060 Laptop GPU, 3.5 s of 
   "shape": [240, 240, 155],
   "spacing_mm": [1.0, 1.0, 1.0],
   "tumour_bbox": {"min": [x0, y0, z0], "max": [x1, y1, z1]},
+  "slices": {
+    "axial": {"index": 110, "count": 155, "width": 540, "height": 664,
+              "layers": {"flair": "http://localhost:8010/api/segment/3f0c.../slices/axial/flair.png", "...": "t1, t1ce, t2, edema, necrotic, enhancing"}},
+    "coronal": {"index": 111, "count": 240, "...": "..."},
+    "sagittal": {"index": 131, "count": 240, "...": "..."}
+  },
   "preview": [{"plane": "axial", "index": 110, "png": "<base64>"}, "... coronal, sagittal"],
   "post_processing": {"et_min_component_voxels": 50, "et_components_predicted": 3, "et_components_removed": 2, "et_voxels_removed": 2},
   "model": {"folds": [1, 2, 3, 4, 5], "cross_validation_mean_dice": {}},
@@ -270,9 +282,42 @@ predicted as ET but not TC therefore counts towards TC in the label map. This ch
   measures how consistently the five models agree, which flags uncertain cases. It is **not** an
   estimate of accuracy against ground truth.
 
+**Viewer slices:** for each plane (axial, coronal, sagittal), the slice through the largest tumour
+cross-section, cropped to the brain and drawn at 4× as seven PNG layers of the same size:
+
+- `flair`, `t1`, `t1ce`, `t2`: grayscale, windowed to the 0.5–99.5 percentile of the brain,
+  transparent outside the brain;
+- `edema`, `necrotic`, `enhancing`: one label each, on the web client's red ramp, to stack on top.
+
+A client stacks them and switches sequence, labels and opacity without another request. Only the
+small 2D slices are kept per result; each PNG is drawn on first request and cached with the result.
+`GET /api/segment/{result_id}/slices/{plane}/{layer}.png` serves them.
+
 **Previews:** three PNG slices (axial, coronal, sagittal) through the largest tumour cross-section.
 Each shows FLAIR with the labels overlaid: red for necrotic core, green for edema, yellow for
 enhancing tumour. They are for quick display only; render the NIfTI for anything interactive.
+
+## `GET /api/segment/{result_id}/report.png`
+
+One slice with the segmentation burned in, for slides and reports, laid out like the classification
+report:
+
+- the study name, plane, slice index, sequence, grid and spacing;
+- the slice with the chosen labels;
+- the WT, TC and ET volumes over the whole study, with what each contains;
+- the export date and result ID.
+
+Query parameters choose what the viewer shows: `plane` (`axial`, `coronal` or `sagittal`),
+`sequence` (`flair`, `t1`, `t1ce` or `t2`), `labels` (comma-separated, from `edema`, `necrotic` and
+`enhancing`) and `opacity` (0-100). The image is 2400 × 3000. It is rendered on the server with
+the same fonts and colours as the classification report.
+
+## `GET /api/sample-study`
+
+The held-out test patient `BraTS2021_00003`, so the segmentation can be tried without data of
+one's own. It lists the four sequences with their size and a `url`. `GET /api/sample-study/{name}`
+returns one of those four files, read from the local BraTS data (`data/raw/`). Nothing else is
+served, the case's ground-truth segmentation included; other names answer `404 sample_not_found`.
 
 ## `GET /api/results/summary`
 
@@ -324,5 +369,8 @@ The tests need the checkpoints and local datasets; they are skipped without them
   (±0.005);
 - that a segmentation job passes through the real stages in order;
 - that the classification report renders, and that only the listed samples are served;
+- that every segmentation viewer layer is served with matching sizes and follows the label map, that
+  the segmentation report renders with the requested plane and sequence, and that only the sample
+  study's four files are served;
 - that the results summary matches the report files;
 - every error path listed above.

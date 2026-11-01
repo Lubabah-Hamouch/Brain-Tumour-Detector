@@ -286,3 +286,53 @@ def test_segment_rejects_4d_volume(client):
 def test_unknown_mask_is_404(client):
     r = client.get("/api/segment/does-not-exist/mask.nii.gz")
     assert r.status_code == 404 and r.json()["error"]["code"] == "result_not_found"
+
+
+def test_unknown_segmentation_slices_and_report_are_404(client):
+    for path in ("/api/segment/does-not-exist/slices/axial/flair.png", "/api/segment/does-not-exist/report.png"):
+        r = client.get(path)
+        assert r.status_code == 404 and r.json()["error"]["code"] == "result_not_found"
+
+
+def test_segment_viewer_slices(client, segmented):
+    """Every plane has seven same-sized layers, through the largest tumour cross-section."""
+    case, body, _, _ = segmented
+    assert body["study"] == case and body["files"]["t1ce"] == f"{case}_t1ce.nii.gz"
+    labels = np.asarray(nib.Nifti1Image.from_bytes(gzip.decompress(base64.b64decode(body["mask_nifti_base64"]))).dataobj)
+    for plane, axis in (("axial", 2), ("coronal", 1), ("sagittal", 0)):
+        view = body["slices"][plane]
+        assert view["count"] == labels.shape[axis]
+        other = tuple(a for a in range(3) if a != axis)
+        assert view["index"] == int((labels > 0).sum(axis=other).argmax())
+        assert set(view["layers"]) == {"flair", "t1", "t1ce", "t2", "edema", "necrotic", "enhancing"}
+        for layer, url in view["layers"].items():
+            r = client.get(url.replace("http://testserver", ""))
+            assert r.status_code == 200 and r.headers["content-type"] == "image/png", (plane, layer)
+            img = Image.open(io.BytesIO(r.content))
+            assert img.size == (view["width"], view["height"]) and img.mode == "RGBA"
+    # The label layers carry the label map: no edema on screen where the slice has none, and vice versa.
+    axial = body["slices"]["axial"]
+    edema = np.asarray(Image.open(io.BytesIO(client.get(axial["layers"]["edema"].replace("http://testserver", "")).content)))
+    assert (edema[..., 3] > 0).any() == (labels[:, :, axial["index"]] == 2).any()
+
+
+def test_segment_report_png(client, segmented):
+    _, body, _, _ = segmented
+    url = body["report_url"].replace("http://testserver", "")
+    r = client.get(url, params={"plane": "coronal", "sequence": "t1ce", "labels": "edema,enhancing", "opacity": 60})
+    assert r.status_code == 200 and r.headers["content-type"] == "image/png"
+    assert r.headers["content-disposition"].startswith("attachment;") and "coronal_t1ce" in r.headers["content-disposition"]
+    assert Image.open(io.BytesIO(r.content)).size == (2400, 3000)
+    assert client.get(url, params={"plane": "oblique"}).status_code == 422
+
+
+def test_sample_study_is_listed_and_served(client):
+    body = client.get("/api/sample-study").json()
+    assert body["case"] == "BraTS2021_00003" and body["split"] == "test"
+    assert [f["sequence"] for f in body["files"]] == ["flair", "t1", "t1ce", "t2"]
+    for f in body["files"]:
+        r = client.get(f["url"].replace("http://testserver", ""))
+        assert r.status_code == 200 and r.content == (RAW_DIR / "brats2021" / body["case"] / f["name"]).read_bytes()
+        assert len(r.content) == f["size_bytes"]
+    for name in ("BraTS2021_00003_seg.nii.gz", "BraTS2021_00009_flair.nii.gz", "..%2F..%2F.env"):
+        assert client.get(f"/api/sample-study/{name}").status_code == 404

@@ -6,7 +6,7 @@ the FastAPI backend in `../backend`.
 | Route | Status |
 |---|---|
 | `/` Overview | built: headline test results from `GET /api/results/summary`, hero render, index, pipeline |
-| `/segment` | placeholder; next to build, on `POST /api/segment` + `GET /api/jobs/{id}` |
+| `/segment` | built: four NIfTI files (or the sample study) with sequence detection and header checks → background job with live stages → three-plane viewer, volumes and downloads (`POST /api/segment`, `GET /api/jobs/{id}`, `GET /api/sample-study`) |
 | `/classify` | built: upload or test-set sample → checked preview → prediction with Grad-CAM viewer and PNG download (`POST /api/classify`, `GET /api/samples`) |
 | `/model-card` | placeholder |
 
@@ -54,13 +54,17 @@ src/
     globals.css         base styles and shared primitives (.label, .mono, .caption, .u)
     page.tsx            Overview
     segment/ classify/ model-card/
-  components/           SiteHeader, SiteFooter, ButtonLink, Button, Metric, HeroVisual, PlannedScreen
-    classify/           Classify screen: upload view, result view, shared styles
+  components/           SiteHeader, SiteFooter, ButtonLink, Button, icons, Metric, HeroVisual, PlannedScreen
+    classify/           Classify screen: upload view, result view
+    segment/            Segment screen: upload, processing (job polling), results viewer
+    workspace/          layout and controls shared by both screens
   design/
     tokens.ts           the design system: colour, type scale, motion, spacing
     useEntryProgress.ts eased entry animation (count-ups, bars), honours reduced motion
   lib/api.ts            typed API client
   lib/imageCheck.ts     browser-side upload checks (format by content, size, dimensions)
+  lib/nifti.ts          NIfTI header and single-slice reading in the browser (streams gzip)
+  lib/studyFiles.ts     sequence detection from file names, per-file and cross-file checks
 ```
 
 ## Design system

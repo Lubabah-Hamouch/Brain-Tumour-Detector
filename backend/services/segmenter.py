@@ -11,9 +11,14 @@ than reimplemented:
 The region masks are combined into a BraTS label map (1 necrotic core, 2 edema, 4 enhancing)
 and placed back into the uploaded volume's grid (uncrop), so the returned NIfTI overlays the
 input directly.
+
+Each result is kept in memory (the most recent `cache_size`) with the label map and one display
+slice per plane (backend/services/slices.py), for the label-map download, the viewer's slice
+images and the PNG report.
 """
 import base64
 import gzip
+import re
 import tempfile
 import threading
 import time
@@ -25,7 +30,9 @@ import torch
 
 from backend.services.cache import ResultCache
 from backend.services.errors import ApiError, relative_name
+from backend.services import slices
 from backend.services.imaging import label_overlay, png_base64
+from backend.services.report import segmentation_report
 from src.data.segmentation_preprocess import ALL_MODALITIES, load_modality, preprocess_image, uncrop
 from src.training.evaluate_segmentation import load_models, predict
 from src.training.inference import dice_scores
@@ -47,6 +54,14 @@ def nested_to_brats(regions):
 def brats_regions(labels):
     """BraTS label map -> {region: bool mask}, the inverse used for volumes and statistics."""
     return {"WT": labels > 0, "TC": np.isin(labels, (1, 4)), "ET": labels == 4}
+
+
+def study_name(names):
+    """A name for the study from its file names: the FLAIR name without extension and sequence suffix."""
+    name = Path(names.get("flair", "") or next(iter(names.values()), "")).name
+    name = re.sub(r"\.nii(\.gz)?$", "", name, flags=re.IGNORECASE)
+    name = re.sub(r"[_.\- ]?(flair|t2f|fl)$", "", name, flags=re.IGNORECASE)
+    return name or "study"
 
 
 def read_nifti(name, data, max_mb):
@@ -120,7 +135,9 @@ class SegmenterService:
         so it runs inside the request and the client gets a 4xx immediately."""
         t0 = time.perf_counter()
         image, ref, warnings = self.load_study(files)
-        return {"image": image, "ref": ref, "warnings": warnings, "load_seconds": time.perf_counter() - t0}
+        names = {m: name for m, (name, _) in files.items()}
+        return {"image": image, "ref": ref, "warnings": warnings, "files": names, "study": study_name(names),
+                "load_seconds": time.perf_counter() - t0}
 
     def segment(self, files, inline_mask=False, base_url=""):
         """Synchronous convenience: prepare + run."""
@@ -162,7 +179,7 @@ class SegmenterService:
             del x_t, total, fold_masks, ensemble, masks
         t3 = time.perf_counter()
 
-        report("postprocessing", 0.0, "ET clean-up, label map, previews")
+        report("postprocessing", 0.0, "ET clean-up, label map, viewer slices")
         et_raw = masks_np[ET]
         _, et_sizes = components(et_raw)
         masks_np[ET] = remove_small_components(et_raw, self.et_min_voxels)
@@ -180,12 +197,20 @@ class SegmenterService:
         nifti = nib.Nifti1Image(labels, ref.affine)
         nifti.header.set_xyzt_units("mm")
         mask_bytes = gzip.compress(nifti.to_bytes(), compresslevel=6)
-        result_id = self.cache.put(mask_bytes)
+        views = slices.extract(image, labels)
+        entry = {"mask": mask_bytes, "views": views, "png": {}, "study": study["study"], "shape": shape,
+                 "spacing": spacing, "regions": region_results}
+        result_id = self.cache.put(entry)
+        entry["result_id"] = result_id
         t4 = time.perf_counter()
 
+        segment_url = f"{base_url}/api/segment/{result_id}"
         return {
             "result_id": result_id,
-            "mask_url": f"{base_url}/api/segment/{result_id}/mask.nii.gz",
+            "study": study["study"],
+            "files": study.get("files", {}),
+            "mask_url": f"{segment_url}/mask.nii.gz",
+            "report_url": f"{segment_url}/report.png",
             "mask_nifti_base64": base64.b64encode(mask_bytes).decode("ascii") if inline_mask else None,
             "labels": BRATS_LABELS,
             "regions": region_results,
@@ -193,6 +218,11 @@ class SegmenterService:
             "spacing_mm": spacing,
             "tumour_bbox": self._bbox(labels > 0),
             "preview": self._previews(image[ALL_MODALITIES.index("flair")], labels),
+            "slices": {plane: {"index": v["index"], "count": v["count"],
+                               "width": int(v["brain"].shape[1] * slices.UPSCALE),
+                               "height": int(v["brain"].shape[0] * slices.UPSCALE),
+                               "layers": {layer: f"{segment_url}/slices/{plane}/{layer}.png" for layer in slices.LAYERS}}
+                       for plane, v in views.items()},
             "post_processing": {"et_min_component_voxels": self.et_min_voxels,
                                 "et_components_predicted": int(len(et_sizes)),
                                 "et_components_removed": int((et_sizes < self.et_min_voxels).sum()),
@@ -204,6 +234,31 @@ class SegmenterService:
                                "inference": round(t3 - t2, 2), "postprocess_and_encode": round(t4 - t3, 2)},
             "warnings": warnings,
         }
+
+    def mask_nifti(self, result_id):
+        entry = self.cache.get(result_id)
+        return entry["mask"] if entry else None
+
+    def slice_png(self, result_id, plane, layer):
+        """One viewer layer as PNG, or None if the result is no longer kept."""
+        entry = self.cache.get(result_id)
+        if entry is None:
+            return None
+        key = (plane, layer)
+        if key not in entry["png"]:
+            entry["png"][key] = slices.layer_png(entry["views"][plane], layer)
+        return entry["png"][key]
+
+    def report_png(self, result_id, plane, sequence, labels, opacity):
+        """The slice on screen with the overlay burned in, plus volumes and identifiers, as one PNG."""
+        entry = self.cache.get(result_id)
+        if entry is None:
+            return None
+        view = entry["views"][plane]
+        return segmentation_report(
+            study=entry["study"], result_id=result_id, plane=plane, sequence=sequence,
+            index=view["index"], count=view["count"], shape=entry["shape"], spacing=entry["spacing"],
+            regions=entry["regions"], image=slices.composite(view, sequence, labels, opacity))
 
     @staticmethod
     def _bbox(mask):

@@ -1,0 +1,536 @@
+/* Segmentation workspace; shared layout comes from workspace/Workspace.module.css. */
+
+/* ---- Upload ---- */
+
+main.uploadMain {
+  align-items: stretch;
+  padding-top: 56px;
+  padding-bottom: 48px;
+}
+
+.column {
+  width: 100%;
+  max-width: 920px;
+  margin: 0 auto;
+  display: flex;
+  flex-direction: column;
+  gap: 32px;
+}
+
+.intro {
+  max-width: 720px;
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+}
+
+.intro p {
+  margin: 0;
+}
+
+.lede {
+  font-size: var(--text-16);
+  line-height: var(--lh-16);
+  color: var(--color-text-secondary);
+}
+
+label.drop {
+  max-width: none;
+  aspect-ratio: auto;
+  min-height: 200px;
+  display: flex;
+}
+
+.dropContent {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 14px;
+  padding: 32px;
+  text-align: center;
+}
+
+.browse {
+  display: flex;
+  justify-content: center;
+  margin-top: -12px;
+}
+
+.table {
+  display: flex;
+  flex-direction: column;
+}
+
+.tableHead,
+.row {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) 88px 168px 240px 44px;
+  gap: 16px;
+}
+
+.tableHead {
+  padding: 0 0 12px;
+}
+
+.right {
+  text-align: right;
+}
+
+.row {
+  align-items: center;
+  min-height: 60px;
+  padding: 8px 0;
+  border-top: 1px solid var(--color-hairline);
+  animation: rowIn var(--dur-crossfade) var(--ease) both;
+}
+
+@keyframes rowIn {
+  from {
+    opacity: 0;
+    transform: translateY(-4px);
+  }
+}
+
+.fileName {
+  font-size: var(--text-12);
+  color: var(--color-text);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.fileName[data-nifti="false"] {
+  color: var(--color-text-muted);
+}
+
+.size {
+  font-size: var(--text-12);
+  color: var(--color-text-muted);
+  text-align: right;
+}
+
+.sequence {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.sequence select {
+  min-height: 34px;
+  padding: 0 8px;
+  border: 0;
+  background: var(--color-bg);
+  color: var(--color-text);
+  box-shadow: inset 0 0 0 1px var(--color-control);
+  font-family: inherit;
+  font-size: var(--text-14);
+}
+
+.sequence select[data-problem="true"] {
+  box-shadow: inset 0 0 0 1px rgba(236, 237, 239, 0.75);
+}
+
+.status {
+  display: flex;
+  align-items: flex-start;
+  gap: 8px;
+  font-size: var(--text-14);
+  line-height: 1.4;
+  color: var(--color-text-strong);
+}
+
+.status svg {
+  flex: 0 0 14px;
+  margin-top: 2px;
+}
+
+.row[data-ok="true"] .status {
+  color: var(--color-text-secondary);
+}
+
+.row[data-pending="true"] .status {
+  color: var(--color-text-muted);
+}
+
+.empty {
+  margin: 0;
+  padding: 18px 0;
+  border-top: 1px solid var(--color-hairline);
+  font-size: var(--text-14);
+  color: var(--color-text-muted);
+}
+
+.slot {
+  display: grid;
+  grid-template-columns: 64px minmax(0, 1fr) 16px;
+  gap: 12px;
+  align-items: center;
+  min-height: 40px;
+  border-top: 1px solid var(--color-hairline);
+  color: var(--color-text-disabled);
+}
+
+.slot[data-ok="true"] {
+  color: var(--color-text-secondary);
+}
+
+.slotName {
+  font-weight: 600;
+  font-size: var(--text-14);
+  color: var(--color-text);
+}
+
+.slotFile {
+  font-size: var(--text-12);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.slot svg {
+  color: var(--color-text);
+}
+
+/* ---- Processing ---- */
+
+main.processingMain {
+  justify-content: center;
+}
+
+div.narrow {
+  max-width: 640px;
+}
+
+.processingViewer {
+  overflow: hidden;
+}
+
+/* A thin bright line passes down the slice while the job runs. */
+.sweep {
+  position: absolute;
+  left: 0;
+  right: 0;
+  top: 0;
+  height: 96px;
+  margin-top: -96px;
+  pointer-events: none;
+  background: linear-gradient(180deg, rgba(255, 255, 255, 0), rgba(255, 255, 255, 0.05));
+  border-bottom: 1px solid rgba(255, 255, 255, 0.75);
+  box-shadow: 0 1px 14px rgba(255, 255, 255, 0.3);
+  animation: sweep var(--dur-resolve) cubic-bezier(0.45, 0, 0.2, 1) infinite;
+}
+
+@keyframes sweep {
+  0% {
+    top: 0%;
+    opacity: 0;
+  }
+  8% {
+    opacity: 1;
+  }
+  92% {
+    opacity: 1;
+  }
+  100% {
+    top: 100%;
+    opacity: 0;
+  }
+}
+
+.progress {
+  width: 100%;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.progressFill {
+  position: absolute;
+  inset: 0 auto 0 0;
+  background: var(--color-bar-fill);
+  transition: width var(--dur-crossfade) var(--ease);
+}
+
+.progressText {
+  display: flex;
+  justify-content: space-between;
+  gap: 16px;
+}
+
+.statusBlock {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.statusBlock p {
+  margin: 0;
+}
+
+.elapsed {
+  font-weight: 300;
+  font-size: var(--text-64);
+  line-height: var(--lh-64);
+  letter-spacing: -0.04em;
+  font-variant-numeric: tabular-nums;
+}
+
+.unit {
+  font-size: var(--text-20);
+  color: var(--color-text-muted);
+  letter-spacing: 0;
+}
+
+.statusNote {
+  font-size: var(--text-14);
+  color: var(--color-text-muted);
+}
+
+/* Failure is loud through brightness and the icon, never colour: red is for findings only. */
+.failNote {
+  font-size: var(--text-14);
+  color: var(--color-text-strong);
+}
+
+.stage {
+  display: grid;
+  grid-template-columns: 18px minmax(0, 1fr) auto;
+  gap: 12px;
+  align-items: center;
+  min-height: 52px;
+  border-top: 1px solid var(--color-hairline);
+  color: var(--color-text-disabled);
+  transition: color var(--dur-crossfade) var(--ease);
+}
+
+.stage[data-state="done"] {
+  color: var(--color-text-secondary);
+}
+
+.stage[data-state="active"],
+.stage[data-state="failed"] {
+  color: var(--color-text-strong);
+}
+
+.stageMark {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.dot {
+  display: block;
+  width: 7px;
+  height: 7px;
+  box-shadow: inset 0 0 0 1px var(--color-text-disabled);
+}
+
+.stage[data-state="active"] .dot {
+  background: var(--color-text-strong);
+  box-shadow: none;
+}
+
+.stageText {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  font-size: var(--text-14);
+  padding: 6px 0;
+}
+
+.stageTime {
+  font-variant-numeric: tabular-nums;
+}
+
+/* ---- Results ---- */
+
+.planeStack {
+  position: absolute;
+  inset: 0;
+  transition: opacity var(--dur-crossfade) var(--ease);
+}
+
+button.planeButton {
+  padding: 0 16px;
+}
+
+label.opacity input {
+  width: 120px;
+}
+
+button.seqButton {
+  min-width: 56px;
+  padding: 0 12px;
+  letter-spacing: 0.08em;
+  text-transform: none;
+}
+
+.legend {
+  width: 100%;
+  max-width: 720px;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px 24px;
+}
+
+.legendItem {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  min-height: 44px;
+  padding: 0;
+  border: 0;
+  background: transparent;
+  color: var(--color-text-muted);
+  font-family: inherit;
+  font-size: var(--text-14);
+  cursor: pointer;
+  transition: color var(--dur-hover) var(--ease);
+}
+
+.legendItem .mono {
+  font-size: var(--text-12);
+}
+
+.legendItem[aria-pressed="true"] {
+  color: var(--color-text);
+}
+
+.legendItem:hover {
+  color: var(--color-text-strong);
+}
+
+.swatch {
+  display: inline-block;
+  width: 10px;
+  height: 10px;
+  opacity: 0.25;
+  transition: opacity var(--dur-crossfade) var(--ease);
+}
+
+.legendItem[aria-pressed="true"] .swatch {
+  opacity: 1;
+}
+
+.regions {
+  display: flex;
+  flex-direction: column;
+  gap: 32px;
+}
+
+.region {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.regionLabel {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.swatchSmall {
+  display: inline-block;
+  width: 8px;
+  height: 8px;
+}
+
+.volume {
+  font-weight: 300;
+  font-size: var(--text-40);
+  line-height: 1;
+  letter-spacing: -0.04em;
+  font-variant-numeric: tabular-nums;
+}
+
+.volume[data-large="true"] {
+  font-size: var(--text-64);
+}
+
+.volumeUnit {
+  font-size: var(--text-14);
+  color: var(--color-text-muted);
+  letter-spacing: 0;
+}
+
+.shareFill {
+  position: absolute;
+  inset: 0 auto 0 0;
+  background: var(--color-bar-share);
+}
+
+.ghostLink {
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  min-height: 48px;
+  padding: 0 28px;
+  color: var(--color-text);
+  text-decoration: none;
+  box-shadow: inset 0 0 0 1px rgba(236, 237, 239, 0.24);
+  font-weight: 600;
+  font-size: var(--text-16);
+  font-variant-caps: all-small-caps;
+  letter-spacing: 0.14em;
+  transition:
+    box-shadow var(--dur-hover) var(--ease),
+    color var(--dur-hover) var(--ease);
+}
+
+.ghostLink:hover {
+  color: var(--color-text-strong);
+  box-shadow: inset 0 0 0 1px rgba(236, 237, 239, 0.6);
+}
+
+.detailText {
+  margin: 10px 0 0;
+  line-height: 1.65;
+}
+
+/* ---- Narrow screens ---- */
+
+@media (max-width: 900px) {
+  .tableHead {
+    display: none;
+  }
+  /* Each file becomes a small card: name and size, then sequence, then the check. */
+  .row {
+    grid-template-columns: minmax(0, 1fr) auto 44px;
+    grid-template-areas:
+      "name size remove"
+      "seq seq seq"
+      "check check check";
+    row-gap: 10px;
+    padding: 12px 0;
+  }
+  .row > :nth-child(1) {
+    grid-area: name;
+  }
+  .row > :nth-child(2) {
+    grid-area: size;
+  }
+  .row > :nth-child(3) {
+    grid-area: seq;
+  }
+  .row > :nth-child(4) {
+    grid-area: check;
+  }
+  .row > :nth-child(5) {
+    grid-area: remove;
+  }
+}
+
+@media (max-width: 640px) {
+  main.uploadMain {
+    padding-top: 32px;
+  }
+  .elapsed {
+    font-size: var(--text-40);
+  }
+  .volume[data-large="true"] {
+    font-size: var(--text-40);
+  }
+}

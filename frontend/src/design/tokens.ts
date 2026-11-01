@@ -21,6 +21,7 @@ export const color = {
   barFill: "#E4E6E8",
   barMuted: "#9EA2A7",
   barDim: "#6A6E74",
+  barShare: "#C6C9CD",
   // Text, from loudest to quietest
   textStrong: "#FFFFFF",
   text: "#ECEDEF",

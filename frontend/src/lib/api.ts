@@ -105,3 +105,92 @@ export function classify(file: File): Promise<ClassificationResult> {
   form.append("file", file);
   return request("/api/classify", { method: "POST", body: form });
 }
+
+// ---- Segmentation ----
+
+export type Plane = "axial" | "coronal" | "sagittal";
+export type SequenceField = "flair" | "t1" | "t1ce" | "t2";
+export type LabelLayer = "edema" | "necrotic" | "enhancing";
+
+export type RegionResult = {
+  voxels: number;
+  volume_ml: number;
+  mean_probability: number | null;
+  model_agreement: number;
+};
+
+export type ViewerPlane = {
+  index: number;
+  count: number;
+  width: number;
+  height: number;
+  layers: Record<SequenceField | LabelLayer, string>;
+};
+
+export type SegmentationResult = {
+  result_id: string;
+  study: string;
+  files: Partial<Record<SequenceField, string>>;
+  mask_url: string;
+  report_url: string;
+  regions: Record<"WT" | "TC" | "ET", RegionResult>;
+  shape: number[];
+  spacing_mm: number[];
+  slices: Record<Plane, ViewerPlane>;
+  post_processing: {
+    et_min_component_voxels: number;
+    et_components_predicted: number;
+    et_components_removed: number;
+    et_voxels_removed: number;
+  };
+  model: { folds: number[]; cross_validation_mean_dice: Record<string, number> };
+  timing_seconds: { load: number; preprocess: number; inference: number; postprocess_and_encode: number };
+  warnings: string[];
+};
+
+export type JobStage = {
+  name: string;
+  label: string;
+  status: "pending" | "running" | "complete" | "failed";
+  fraction: number;
+  detail: string;
+  seconds: number | null;
+};
+
+export type JobStatus = {
+  job_id: string;
+  status: "queued" | "running" | "complete" | "failed";
+  queue_position: number | null;
+  stage: string | null;
+  stage_label: string | null;
+  stage_detail: string | null;
+  progress: number;
+  stages: JobStage[];
+  elapsed_seconds: number;
+  result: SegmentationResult | null;
+  error: { code: string; message: string } | null;
+};
+
+export type JobAccepted = { job_id: string; status: string; status_url: string };
+
+export type SampleStudy = {
+  case: string;
+  split: string;
+  files: { sequence: SequenceField; name: string; size_bytes: number; url: string }[];
+};
+
+export function startSegmentation(files: Record<SequenceField, File>): Promise<JobAccepted> {
+  const form = new FormData();
+  for (const [field, file] of Object.entries(files)) form.append(field, file);
+  return request("/api/segment", { method: "POST", body: form });
+}
+
+/** Status of a job; `statusUrl` is the absolute URL the API returned. */
+export async function getJob(statusUrl: string, signal?: AbortSignal): Promise<JobStatus> {
+  const path = statusUrl.startsWith(API_URL) ? statusUrl.slice(API_URL.length) : new URL(statusUrl).pathname;
+  return request(path, { signal, cache: "no-store" });
+}
+
+export function getSampleStudy(): Promise<SampleStudy> {
+  return request("/api/sample-study");
+}

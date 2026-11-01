@@ -1,5 +1,6 @@
-"""Shareable PNG of a classification result: the slice, the Grad-CAM overlay, the prediction and
-all four probabilities, laid out like the web client's result screen.
+"""Shareable PNG reports, laid out like the web client's result screens:
+- classification: the slice, the Grad-CAM overlay, the prediction and all four probabilities;
+- segmentation: one slice with the predicted regions, the three region volumes and identifiers.
 
 Rendered on the server with Pillow, using the web client's fonts (Geist, JetBrains Mono, bundled
 in backend/assets/fonts under the SIL Open Font License) and its colour tokens, so the export
@@ -178,3 +179,76 @@ def is_grayscale(img):
         return True
     rgb = np.asarray(img.convert("RGB"), dtype=np.int16)
     return bool(np.abs(rgb[..., 0] - rgb[..., 1]).max() <= 2 and np.abs(rgb[..., 1] - rgb[..., 2]).max() <= 2)
+
+
+REGION_ROWS = (
+    ("WT", "Whole tumour", "#7A111B", "Edema, core and enhancing (labels 1+2+4)"),
+    ("TC", "Tumour core", "#D7263D", "Necrotic core and enhancing (labels 1+4)"),
+    ("ET", "Enhancing tumour", "#FFC2CA", "Label 4"),
+)
+SEQUENCE_NAMES = {"flair": "FLAIR", "t1": "T1", "t1ce": "T1ce", "t2": "T2"}
+
+
+def segmentation_report(*, study, result_id, plane, sequence, index, count, shape, spacing, regions, image,
+                        exported=None):
+    """PNG bytes: one slice with the predicted regions burned in, the three region volumes and identifiers.
+
+    image: the composited slice (PIL RGB on black), as from backend.services.slices.composite.
+    """
+    c = Canvas()
+    right = WIDTH - PAD
+    exported = exported or datetime.now(timezone.utc)
+
+    # Header: study, slice and grid.
+    label(c, PAD, PAD + 12, "Tumour segmentation · overlay")
+    baseline = PAD + 12 + 10 + 32
+    spacing_text = (f"{spacing[0]:.1f} mm" if len({round(s, 3) for s in spacing}) == 1
+                    else " × ".join(f"{s:.2f}" for s in spacing) + " mm")
+    meta = [f"{plane.capitalize()} · {'zyx'[('axial', 'coronal', 'sagittal').index(plane)]} {index} / {count} · "
+            f"{SEQUENCE_NAMES.get(sequence, sequence)}",
+            f"{' × '.join(str(s) for s in shape)} · {spacing_text}"]
+    c.text(right, baseline, meta[0], mono(14), SECONDARY, anchor="rs")
+    c.text(right, baseline + 21, meta[1], mono(14), SECONDARY, anchor="rs")
+    meta_width = max(c.width(m, mono(14)) for m in meta)
+    c.text(PAD, baseline, c.fit(study, sans(40, 700), right - PAD - meta_width - 32), sans(40, 700), TEXT)
+    header_bottom = PAD + 12 + 10 + 40 + 8
+
+    footer_top = HEIGHT - PAD - 16 - 36
+    stats_bottom = footer_top - 40
+    stats_top = stats_bottom - 104
+    panel_top, panel_bottom = header_bottom + 40, stats_top - 40
+
+    # Image panel: the slice, contained in the panel with a 24 px margin.
+    c.rect(PAD, panel_top, right, panel_bottom, PANEL)
+    box_w, box_h = (right - PAD - 48) * SCALE, (panel_bottom - panel_top - 48) * SCALE
+    fit = min(box_w / image.width, box_h / image.height)
+    target = (round(image.width * fit), round(image.height * fit))
+    c.image.paste(image.resize(target, Image.LANCZOS),
+                  (round(PAD * SCALE + (right - PAD) * SCALE / 2 - target[0] / 2),
+                   round(panel_top * SCALE + (panel_bottom - panel_top) * SCALE / 2 - target[1] / 2)))
+
+    # Volumes over the whole study, one column per region.
+    col_w = (right - PAD - 2 * 32) / 3
+    for i, (key, name, colour, note) in enumerate(REGION_ROWS):
+        x = PAD + i * (col_w + 32)
+        c.hline(x, x + col_w, stats_top)
+        c.rect(x, stats_top + 16 + 4, x + 10, stats_top + 16 + 14, colour)
+        c.text(x + 18, stats_top + 16 + 14, name, sans(14), TEXT)
+        volume = regions.get(key, {}).get("volume_ml")
+        value = f"{volume:.2f}" if volume is not None else "–"
+        c.text(x, stats_top + 16 + 22 + 8 + 34, value, mono(40, 300), TEXT, tracking=-0.03)
+        c.text(x + c.width(value, mono(40, 300), -0.03) + 4, stats_top + 16 + 22 + 8 + 34, " mL", sans(14), MUTED)
+        c.text(x, stats_bottom - 2, note, sans(12), MUTED)
+
+    # Footer.
+    c.hline(PAD, right, footer_top)
+    c.text(PAD, footer_top + 16 + 13, "Brain Tumour MRI · 3D U-Net, 5-fold ensemble · volumes over the whole study, "
+                                      "not this slice", sans(12), MUTED)
+    c.text(PAD, footer_top + 16 + 31, "Research use only. Not a medical device; must not inform diagnosis or treatment.",
+           sans(12), MUTED)
+    c.text(right, footer_top + 16 + 13, f"exported {exported:%Y-%m-%d}", mono(12), MUTED, anchor="rs")
+    c.text(right, footer_top + 16 + 31, f"result {result_id[:8]}", mono(12), MUTED, anchor="rs")
+
+    buffer = io.BytesIO()
+    c.image.save(buffer, format="PNG", optimize=True)
+    return buffer.getvalue()

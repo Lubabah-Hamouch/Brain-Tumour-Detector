@@ -6,7 +6,7 @@ import { useId, useState } from "react";
 import { useEntryProgress } from "@/design/useEntryProgress";
 import { CLASS_LABELS, type ClassificationResult, type ResultsSummary, type Sample } from "@/lib/api";
 
-import styles from "./Classify.module.css";
+import styles from "@/components/workspace/Workspace.module.css";
 import { SampleNote } from "./SampleNote";
 import type { Selected } from "./types";
 
