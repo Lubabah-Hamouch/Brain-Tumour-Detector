@@ -336,3 +336,46 @@ def test_sample_study_is_listed_and_served(client):
         assert len(r.content) == f["size_bytes"]
     for name in ("BraTS2021_00003_seg.nii.gz", "BraTS2021_00009_flair.nii.gz", "..%2F..%2F.env"):
         assert client.get(f"/api/sample-study/{name}").status_code == 404
+
+
+def test_model_card_matches_results_files(client):
+    """Every model card number traces to reports/results/ or reports/final_results.md."""
+    card = client.get("/api/results/model-card").json()
+    seg = json.loads((RESULTS / "segmentation_test.json").read_text())
+    stress = json.loads((RESULTS / "format_stress_test.json").read_text())
+    final = (PROJECT_ROOT / "reports" / "final_results.md").read_text(encoding="utf-8")
+
+    # Segmentation table and paired comparisons, as printed in final_results.md.
+    rows = {(r["model"], r["post_processed"]): r for r in card["segmentation"]["rows"]}
+    assert rows[("ensemble", True)]["served"] and rows[("ensemble", True)]["mean"] == seg["test"]["ensemble"]["post_processed"]["mean"]
+    assert f"{rows[('fold4', False)]['mean']:.4f}" == "0.8873" and "| Single best (fold 4) | no | 0.9218 | 0.8835 | 0.8566 | 0.8873 |" in final
+    ens = card["segmentation"]["ensemble_vs_single_best"]
+    assert f"+{ens['difference']:.4f}" == "+0.0088" and (ens["patients_better"], ens["patients_worse"]) == (141, 48)
+    cleanup = card["segmentation"]["et_cleanup_on_ensemble"]
+    assert cleanup["ci95"][0] < 0 < cleanup["ci95"][1]  # not significant, as the report says
+    assert card["segmentation"]["patients_without_et"] == 5
+    assert card["segmentation"]["patients_without_et_scored_1"] == {"raw": 3, "post_processed": 5}
+    cv = card["segmentation"]["cross_validation"]
+    assert f"{cv['mean']:.4f} ± {cv['std']:.4f}" == "0.8983 ± 0.0044" and "**0.8983 ± 0.0044**" in final
+
+    # Classification variants and the stress test.
+    models = card["classification"]["models"]
+    assert [m["key"] for m in models] == ["A", "B", "C", "D"] and [m["served"] for m in models] == [False, False, False, True]
+    assert [f"{m['accuracy'] * 100:.2f}%" for m in models] == ["98.26%", "98.17%", "97.78%", "98.26%"]
+    assert [f"{m['accuracy_at_128px'] * 100:.2f}%" for m in models] == ["74.93%", "77.53%", "97.11%", "98.17%"]
+    assert [m["values"] for m in card["stress_test"]["models"]] == [[3, 12, 10, 250], [1, 14, 16, 213], [2, 3, 3, 9], [2, 1, 1, 0]]
+    assert card["stress_test"]["tumour_images"] == stress["tumour_images"] == 778
+    assert [c["label"] for c in card["stress_test"]["conditions"]] == ["unmodified", "225 × 225", "210 × 234", "128 × 128"]
+    assert card["headline"]["mcnemar_p"] == 1.0
+
+    # Specification: dataset counts from the manifests, parameter counts from the loaded models.
+    spec = card["specification"]
+    assert spec["segmentation"]["patients"] == 1251 and spec["classification"]["images"] == 6951
+    assert f"{spec['segmentation']['parameters'] / 1e6:.1f}" == "16.5" and "3D U-Net with 16.5 M parameters" in final
+    assert round(spec["classification"]["parameters"] / 1e6, 1) == 20.2
+    assert [round(spec["classification"]["split"][k] * 100) for k in ("train", "val", "test")] == [70, 15, 15]
+
+    # Limitations: the bullets of final_results.md, in order.
+    titles = [line.split("**")[1].rstrip(".") for line in final.split("## Limitations")[1].split("## Reproducing")[0].splitlines()
+              if line.startswith("- **")]
+    assert [x["title"] for x in card["limitations"]] == titles and len(titles) == 7

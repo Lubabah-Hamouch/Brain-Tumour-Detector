@@ -1,4 +1,4 @@
-"""Headline test results for the web client, read from reports/results/ (the evaluation outputs).
+"""Test results for the web client (Overview headline, Model card), read from reports/results/ (the evaluation outputs).
 
 Nothing here is hard-coded: segmentation numbers come from segmentation_test.json, and the
 classification numbers from the classification_test_*.json whose checkpoint is the one the
@@ -11,6 +11,7 @@ from fastapi import APIRouter, Request
 
 from backend.schemas.common import ErrorResponse
 from backend.services.errors import ApiError, relative_name
+from backend.services.model_card import model_card
 from src.config import PROJECT_ROOT
 from src.training.bootstrap_results import wilson
 
@@ -66,3 +67,9 @@ def summary(classifier_checkpoint):
             summary="Headline held-out test results for both models")
 def results_summary(request: Request):
     return summary(request.app.state.settings.classifier_checkpoint)
+
+
+@router.get("/results/model-card", responses={503: {"model": ErrorResponse}},
+            summary="Everything on the model card: specification, test tables, stress test, limitations")
+def results_model_card(request: Request):
+    return model_card(request.app)

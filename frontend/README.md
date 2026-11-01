@@ -8,7 +8,7 @@ the FastAPI backend in `../backend`.
 | `/` Overview | built: headline test results from `GET /api/results/summary`, hero render, index, pipeline |
 | `/segment` | built: four NIfTI files (or the sample study) with sequence detection and header checks → background job with live stages → three-plane viewer, volumes and downloads (`POST /api/segment`, `GET /api/jobs/{id}`, `GET /api/sample-study`) |
 | `/classify` | built: upload or test-set sample → checked preview → prediction with Grad-CAM viewer and PNG download (`POST /api/classify`, `GET /api/samples`) |
-| `/model-card` | placeholder |
+| `/model-card` | built: specification, test tables with paired comparisons, stress-test chart and limitations, all from `GET /api/results/model-card` |
 
 ## Running locally
 
@@ -54,8 +54,9 @@ src/
     globals.css         base styles and shared primitives (.label, .mono, .caption, .u)
     page.tsx            Overview
     segment/ classify/ model-card/
-  components/           SiteHeader, SiteFooter, ButtonLink, Button, icons, Metric, HeroVisual, PlannedScreen
+  components/           SiteHeader, SiteFooter, ButtonLink, Button, icons, Metric, HeroVisual
     classify/           Classify screen: upload view, result view
+    modelcard/          Model card: stress-test headline and chart, table styles
     segment/            Segment screen: upload, processing (job polling), results viewer
     workspace/          layout and controls shared by both screens
   design/

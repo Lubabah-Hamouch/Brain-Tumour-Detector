@@ -37,6 +37,13 @@ export const color = {
   enhancing: "#FFC2CA",
 } as const;
 
+/**
+ * Ordered grey ramp for comparing model variants in charts (oldest to served), dark to light.
+ * Greys because red is reserved for findings. Checked with a palette validator against the page
+ * background: adjacent steps differ by OKLab ΔE >= 15 and every step has >= 3:1 contrast.
+ */
+export const chartSeries = ["#5E6268", "#8C9096", "#BBBFC4", "#F2F2F0"] as const;
+
 /** Region swatches used in legends and results (WT contains TC contains ET). */
 export const regionColor = { WT: color.edema, TC: color.necroticCore, ET: color.enhancing } as const;
 

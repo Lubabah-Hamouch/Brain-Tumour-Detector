@@ -194,3 +194,73 @@ export async function getJob(statusUrl: string, signal?: AbortSignal): Promise<J
 export function getSampleStudy(): Promise<SampleStudy> {
   return request("/api/sample-study");
 }
+
+// ---- Model card ----
+
+export type PairedComparison = {
+  difference: number;
+  ci95: [number, number];
+  patients_better: number;
+  patients_worse: number;
+};
+
+export type ModelCard = {
+  headline: {
+    served_accuracy_at_128px: number;
+    original_accuracy_at_128px: number;
+    served_accuracy: number;
+    original_accuracy: number;
+    mcnemar_p: number | null;
+  };
+  specification: {
+    segmentation: {
+      patients: number;
+      test_patients: number;
+      folds: number;
+      parameters: number | null;
+      /** Edge of the cubic sliding window, or one size per axis. */
+      patch_size: number | number[] | null;
+      et_min_voxels: number;
+    };
+    classification: {
+      images: number;
+      split: { train: number; val: number; test: number };
+      parameters: number | null;
+      image_size: number | null;
+    };
+  };
+  segmentation: {
+    test_patients: number;
+    single_best_fold: string;
+    rows: { model: string; post_processed: boolean; served: boolean; WT: number; TC: number; ET: number; mean: number }[];
+    ensemble_vs_single_best: PairedComparison;
+    et_cleanup_on_ensemble: PairedComparison;
+    patients_without_et: number;
+    patients_without_et_scored_1: { raw: number; post_processed: number };
+    cross_validation: { mean: number; std: number; folds: number };
+  };
+  classification: {
+    test_images: number;
+    models: {
+      key: string;
+      name: string;
+      change: string;
+      served: boolean;
+      checkpoint_epoch: number;
+      accuracy: number;
+      macro_f1: number;
+      accuracy_at_128px: number;
+    }[];
+  };
+  stress_test: {
+    tumour_images: number;
+    conditions: { key: string; label: string }[];
+    models: { key: string; name: string; served: boolean; values: number[]; accuracy: number[] }[];
+  };
+  limitations: { title: string; body: string }[];
+  sources: string[];
+};
+
+export function getModelCard(): Promise<ModelCard> {
+  return request("/api/results/model-card");
+}

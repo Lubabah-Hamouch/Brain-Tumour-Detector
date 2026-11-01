@@ -1,0 +1,585 @@
+/* Model card: dense tables of test results. Numbers are monospaced, tabular and right-aligned;
+   text columns are left-aligned in the sans face; the served row is set apart by brightness and
+   stronger rules, never by colour. */
+
+/* ---- Headline: the format stress test ---- */
+
+.top {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: flex-end;
+  gap: 64px;
+  padding: 112px var(--page-margin) 120px;
+  background: linear-gradient(180deg, rgba(255, 255, 255, 0.025), rgba(255, 255, 255, 0) 70%);
+}
+
+.topMain {
+  flex: 7 1 600px;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 28px;
+}
+
+.topMain h1,
+.topMain p {
+  margin: 0;
+}
+
+.hero {
+  font-weight: 300;
+  font-size: var(--text-128);
+  line-height: var(--lh-128);
+  letter-spacing: var(--track-128);
+  font-variant-numeric: tabular-nums;
+}
+
+.heroUnit {
+  font-size: var(--text-64);
+  color: var(--color-text-muted);
+}
+
+.heroPlaceholder {
+  display: block;
+  height: 115px;
+  max-width: 520px;
+  background: linear-gradient(90deg, rgba(255, 255, 255, 0.03), rgba(255, 255, 255, 0.06), rgba(255, 255, 255, 0.03));
+}
+
+.heroClaim {
+  max-width: 680px;
+  font-weight: 600;
+  font-size: var(--text-28);
+  line-height: var(--lh-28);
+  letter-spacing: var(--track-28);
+}
+
+.compare {
+  display: grid;
+  grid-template-columns: 150px minmax(0, 1fr) 80px;
+  gap: 16px 20px;
+  align-items: center;
+  max-width: 760px;
+  padding-top: 12px;
+  font-size: var(--text-14);
+}
+
+.compareServed {
+  color: var(--color-text);
+}
+
+.compareOther {
+  color: var(--color-text-muted);
+}
+
+.compareValue {
+  text-align: right;
+  font-size: var(--text-12);
+  font-variant-numeric: tabular-nums;
+}
+
+.track {
+  position: relative;
+  height: 6px;
+  background: var(--color-bar-track);
+}
+
+.trackFill,
+.trackFillDim {
+  position: absolute;
+  inset: 0 auto 0 0;
+  background: var(--color-bar-fill);
+}
+
+/* The original model, in the darkest chart step. */
+.trackFillDim {
+  background: var(--color-bar-dim);
+}
+
+.topNote {
+  flex: 4 1 320px;
+  min-width: 0;
+  margin: 0;
+  font-size: var(--text-14);
+  line-height: var(--lh-14);
+  color: var(--color-text-muted);
+}
+
+.unavailable {
+  margin: 0;
+  max-width: 720px;
+  font-size: var(--text-14);
+  color: var(--color-text-secondary);
+}
+
+/* ---- Sections ---- */
+
+.sections {
+  display: flex;
+  flex-direction: column;
+  gap: var(--section-gap);
+  padding: 0 var(--page-margin);
+}
+
+.specSection {
+  padding-top: 160px;
+  display: flex;
+  flex-direction: column;
+  gap: 24px;
+}
+
+.specSection h2 {
+  margin: 0;
+}
+
+.block {
+  display: flex;
+  flex-direction: column;
+  gap: 40px;
+}
+
+.blockHead {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 12px;
+}
+
+.h2 {
+  margin: 0;
+  font-weight: 700;
+  font-size: var(--text-40);
+  line-height: var(--lh-40);
+  letter-spacing: var(--track-40);
+}
+
+.scroll {
+  overflow-x: auto;
+}
+
+/* ---- Tables ---- */
+
+.spec,
+.data {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: var(--text-14);
+}
+
+.spec {
+  min-width: 760px;
+  line-height: var(--lh-14);
+}
+
+.spec thead th,
+.data thead th {
+  padding: 0 24px 14px 0;
+  font-weight: 500;
+  font-size: var(--text-12);
+  letter-spacing: var(--track-12);
+  text-transform: uppercase;
+  color: var(--color-text-muted);
+  text-align: left;
+  white-space: nowrap;
+}
+
+.spec thead th:first-child {
+  width: 130px;
+}
+
+.spec tbody tr {
+  border-top: 1px solid var(--color-hairline);
+}
+
+.spec tbody tr:last-child {
+  border-bottom: 1px solid var(--color-hairline);
+}
+
+.spec tbody th {
+  padding: 16px 24px 16px 0;
+  text-align: left;
+  vertical-align: top;
+  font-weight: 500;
+  font-size: var(--text-12);
+  letter-spacing: var(--track-12);
+  text-transform: uppercase;
+  color: var(--color-text-muted);
+}
+
+.spec td {
+  padding: 16px 24px 16px 0;
+  vertical-align: top;
+  color: var(--color-text-secondary);
+}
+
+.spec td:last-child,
+.spec thead th:last-child {
+  padding-right: 0;
+}
+
+.data {
+  font-family: var(--font-mono), ui-monospace, monospace;
+  font-variant-numeric: tabular-nums;
+}
+
+.segTable {
+  min-width: 640px;
+}
+
+.clfTable {
+  min-width: 720px;
+}
+
+.data thead th {
+  padding: 0 16px 14px;
+  font-family: var(--font-sans), system-ui, sans-serif;
+  text-align: right;
+}
+
+.data thead th:first-child {
+  padding-left: 0;
+  text-align: left;
+}
+
+.data thead th:last-child {
+  padding-right: 0;
+}
+
+.clfTable thead th:nth-child(2) {
+  text-align: left;
+}
+
+.data tbody tr {
+  border-top: 1px solid var(--color-hairline);
+  color: var(--color-text-secondary);
+}
+
+.data tbody th,
+.data td {
+  padding: 14px 16px;
+  text-align: right;
+  white-space: nowrap;
+}
+
+.data tbody th {
+  padding-left: 0;
+  text-align: left;
+  font-family: var(--font-sans), system-ui, sans-serif;
+  font-weight: 400;
+}
+
+.data td:last-child {
+  padding-right: 0;
+}
+
+.data .text {
+  text-align: left;
+  font-family: var(--font-sans), system-ui, sans-serif;
+  white-space: normal;
+}
+
+.data tbody tr[data-served="true"] {
+  border-top-color: var(--color-hairline-strong);
+  border-bottom: 1px solid var(--color-hairline-strong);
+  color: var(--color-text-strong);
+}
+
+.data tbody tr[data-served="true"] th {
+  font-weight: 600;
+}
+
+.data tbody tr[data-served="true"] .total {
+  font-weight: 500;
+}
+
+/* ---- Paired comparisons ---- */
+
+.findings {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 48px 64px;
+}
+
+.finding {
+  flex: 1 1 260px;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.findingValue {
+  font-weight: 300;
+  font-size: var(--text-40);
+  line-height: var(--lh-40);
+  letter-spacing: var(--track-40);
+  font-variant-numeric: tabular-nums;
+}
+
+.findingSpread {
+  font-size: var(--text-20);
+  color: var(--color-text-muted);
+  letter-spacing: 0;
+}
+
+.findingTitle {
+  font-weight: 600;
+  font-size: var(--text-16);
+}
+
+/* ---- Stress-test chart ---- */
+
+.figure {
+  margin: 0;
+  padding-top: 40px;
+  display: flex;
+  flex-direction: column;
+  gap: 22px;
+}
+
+.figcaption {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.figTitle {
+  max-width: 760px;
+  font-weight: 600;
+  font-size: var(--text-20);
+  line-height: var(--lh-20);
+  letter-spacing: var(--track-20);
+}
+
+.figNote {
+  margin: 0;
+  max-width: 860px;
+  font-size: var(--text-14);
+  line-height: var(--lh-14);
+  color: var(--color-text-muted);
+}
+
+.chartBlock {
+  display: flex;
+  flex-direction: column;
+  gap: 22px;
+}
+
+.legend {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 12px 26px;
+  font-size: var(--text-14);
+}
+
+.legendItem {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  color: var(--color-text-muted);
+}
+
+.legendItem[data-served="true"] {
+  color: var(--color-text-strong);
+}
+
+.swatch {
+  display: inline-block;
+  width: 10px;
+  height: 10px;
+}
+
+.chartScroll {
+  overflow-x: auto;
+  /* A horizontal scroll box also clips vertically: leave room above the plot for the tooltip. */
+  padding-top: 104px;
+  margin-top: -88px;
+}
+
+.chart {
+  min-width: 720px;
+  display: grid;
+  grid-template-columns: 48px repeat(4, minmax(0, 1fr));
+  gap: 0 32px;
+}
+
+.yAxis {
+  position: relative;
+  font-size: var(--text-12);
+  color: var(--color-text-muted);
+}
+
+.yAxis span {
+  position: absolute;
+  right: 0;
+  transform: translateY(50%);
+  line-height: 1;
+}
+
+.group {
+  display: flex;
+  align-items: flex-end;
+  gap: 6px;
+  border-bottom: 1px solid var(--color-hairline-strong);
+}
+
+.barSlot {
+  position: relative;
+  flex: 1 1 0;
+  height: 100%;
+  display: flex;
+  flex-direction: column;
+  justify-content: flex-end;
+  align-items: center;
+  gap: 6px;
+  outline-offset: 2px;
+  transition: opacity var(--dur-hover) var(--ease);
+}
+
+.barSlot[data-dim="true"] {
+  opacity: 0.45;
+}
+
+.barValue {
+  font-size: var(--text-12);
+  color: var(--color-text-secondary);
+  font-variant-numeric: tabular-nums;
+}
+
+.barValue[data-served="true"] {
+  color: var(--color-text-strong);
+}
+
+.bar {
+  width: 100%;
+}
+
+.groupLabel {
+  padding-top: 12px;
+  font-size: var(--text-12);
+  color: var(--color-text-muted);
+  text-align: center;
+}
+
+.tooltip {
+  position: absolute;
+  /* bottom is set inline: just above the bar and its value label */
+  left: 50%;
+  transform: translateX(-50%);
+  z-index: 2;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  width: max-content;
+  max-width: 240px;
+  padding: 10px 12px;
+  background: var(--color-bg);
+  box-shadow: inset 0 0 0 1px var(--color-hairline-strong);
+  font-size: var(--text-12);
+  line-height: 1.5;
+  color: var(--color-text-secondary);
+  pointer-events: none;
+}
+
+.tooltip[data-edge="start"] {
+  left: 0;
+  transform: none;
+}
+
+/* Keep the tooltip inside the chart at the edges. */
+.tooltip[data-edge="end"] {
+  left: auto;
+  right: 0;
+  transform: none;
+}
+
+.tooltip strong {
+  font-weight: 600;
+  color: var(--color-text-strong);
+}
+
+/* ---- Limitations and sources ---- */
+
+.limitsSection {
+  display: flex;
+  flex-direction: column;
+  gap: 32px;
+}
+
+.limits {
+  margin: 0;
+  padding: 0;
+  list-style: none;
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(340px, 1fr));
+  gap: 0 64px;
+}
+
+.limits li {
+  display: grid;
+  align-content: start;
+  grid-template-columns: 36px minmax(0, 1fr);
+  gap: 8px 12px;
+  padding: 24px 0;
+  border-top: 1px solid var(--color-hairline);
+}
+
+.limits .caption {
+  padding-top: 3px;
+}
+
+.limitTitle {
+  font-weight: 600;
+  font-size: var(--text-16);
+}
+
+.limitBody {
+  font-size: var(--text-14);
+  line-height: var(--lh-14);
+  color: var(--color-text-muted);
+}
+
+.sources {
+  max-width: 920px;
+  margin-top: calc(var(--section-gap) * -0.6);
+}
+
+.sources p {
+  margin: 0;
+  line-height: 1.8;
+  /* File paths are long and unbroken; let them wrap on narrow screens. */
+  overflow-wrap: anywhere;
+}
+
+@media (max-width: 640px) {
+  .top {
+    padding: 64px 20px 72px;
+  }
+  .sections {
+    padding: 0 20px;
+    gap: 120px;
+  }
+  .specSection {
+    padding-top: 72px;
+  }
+  .hero {
+    font-size: var(--text-64);
+  }
+  .heroUnit {
+    font-size: var(--text-40);
+  }
+  .heroClaim {
+    font-size: var(--text-20);
+    line-height: var(--lh-20);
+  }
+  .compare {
+    grid-template-columns: 110px minmax(0, 1fr) 64px;
+    gap: 12px;
+  }
+  .limits {
+    grid-template-columns: minmax(0, 1fr);
+  }
+  .sources {
+    margin-top: -48px;
+  }
+}

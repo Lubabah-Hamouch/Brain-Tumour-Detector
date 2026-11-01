@@ -334,6 +334,28 @@ The headline held-out test results, computed from the evaluation reports rather 
 The response lists the report files it used under `sources`. If a report is missing it returns
 `503 results_unavailable`.
 
+## `GET /api/results/model-card`
+
+Everything the web client's Model card shows, computed from the same files rather than hard-coded:
+
+- **Headline:** accuracy of the served and the original classifier on test images shrunk to 128 px
+  and on unmodified images, and the McNemar p-value between them (`format_stress_test.json`, the
+  `classification_test*.json` reports, the matching `classification_comparison*.json`).
+- **Specification:** patient and image counts and the classification split fractions
+  (`data/manifests/`), parameter counts and patch and image sizes (the loaded models), the ET
+  clean-up threshold (`segmentation_test.json`).
+- **Segmentation:** test Dice for the best single fold and the ensemble, each without and with ET
+  clean-up; the paired bootstrap comparisons (`test_confidence_intervals.json`); the test patients
+  without enhancing tumour and how many score ET Dice 1 before and after clean-up
+  (`segmentation_test_per_case.csv` and the split manifest); cross-validation mean ± standard deviation.
+- **Classification:** accuracy, macro F1 and accuracy at 128 px for the four variants considered.
+- **Stress test:** tumour images called "no tumour" per variant and size condition.
+- **Limitations:** the title and opening of each bullet under "Limitations" in
+  `reports/final_results.md`.
+
+The only fixed text is each classifier variant's label and what it changed in training. The
+response lists the files it read under `sources`.
+
 ## Errors
 
 Every error has the same shape and an HTTP status that matches the problem:
