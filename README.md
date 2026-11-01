@@ -73,7 +73,8 @@ are not redistributed here. Run the app locally to see it (instructions below). 
 screens:
 
 - **Overview.** The headline test results, read live from the evaluation outputs, with a 3D render
-  of a held-out test patient's brain and predicted tumour.
+  of a held-out test patient's brain and predicted tumour. The render links to the live version:
+  the same patient is segmented on the spot and opened in the interactive 3D view.
 - **Segment.** Drop the four NIfTI files of a study (or load the held-out sample study).
   - Each file is matched to its sequence from the file name, can be reassigned, and has its header
     checked in the browser.
@@ -81,7 +82,11 @@ screens:
     them (preprocessing, inference model by model, post-processing).
   - The result opens in an axial, coronal and sagittal viewer with sequence switching, label
     toggles and overlay opacity, next to region volumes and model agreement.
-  - Downloads: the label map (`.nii.gz`) and a PNG of the slice on screen.
+  - A fourth view, **3D**, shows the brain as glass and the predicted tumour regions as glowing
+    surfaces. Drag to rotate, scroll to zoom, and use the same label toggles. The surfaces are built
+    from the result on the server with marching cubes.
+  - Downloads: the label map (`.nii.gz`), a PNG of the slice on screen, and the 3D surfaces
+    (`.glb`).
 - **Classify.** Upload a JPEG or PNG slice (or pick a test-set sample) and see the predicted type,
   all four probabilities and a Grad-CAM heatmap. The result downloads as one PNG.
 - **Model card.** The specification, both test tables with paired comparisons, the format stress
@@ -96,6 +101,7 @@ Next.js web client ──HTTP──▶ FastAPI service
                              │    └─ background worker, one job at a time ──▶ 3D U-Net, 5-fold ensemble
                              ├─ GET  /api/jobs/{id} ── stage, progress, result
                              ├─ GET  /api/results/… ── read from reports/results/
+                             ├─ GET  …/mesh.glb ── 3D surfaces, marching cubes on the label map
                              └─ GET  …/report.png ── PNG reports drawn on the server
 ```
 
@@ -106,6 +112,9 @@ Next.js web client ──HTTP──▶ FastAPI service
     averaged.
   - **Clean-up:** enhancing-tumour components under 50 voxels are removed. That threshold was tuned
     on out-of-fold validation data, never on the test set.
+  - **3D surfaces:** for display, the brain and tumour regions are turned into meshes with marching
+    cubes and Taubin smoothing (about 140,000 triangles, built in about 1.3 s). They are drawn in the browser
+    with three.js.
 - **Classification model.** EfficientNetV2-S (20.2 M parameters) from ImageNet weights, fine-tuned
   end to end on grayscale slices letterboxed to 384 × 384.
   - **Augmentation:** random crops, down-sampling and JPEG re-encoding, the shortcut fix described

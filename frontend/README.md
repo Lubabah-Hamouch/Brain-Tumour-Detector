@@ -6,7 +6,7 @@ the FastAPI backend in `../backend`.
 | Route | Status |
 |---|---|
 | `/` Overview | built: headline test results from `GET /api/results/summary`, hero render, index, pipeline |
-| `/segment` | built: four NIfTI files (or the sample study) with sequence detection and header checks → background job with live stages → three-plane viewer, volumes and downloads (`POST /api/segment`, `GET /api/jobs/{id}`, `GET /api/sample-study`) |
+| `/segment` | built: four NIfTI files (or the sample study) with sequence detection and header checks → background job with live stages → axial, coronal, sagittal and interactive 3D views, volumes and downloads (`POST /api/segment`, `GET /api/jobs/{id}`, `GET /api/sample-study`, `GET /api/segment/{id}/mesh.glb`) |
 | `/classify` | built: upload or test-set sample → checked preview → prediction with Grad-CAM viewer and PNG download (`POST /api/classify`, `GET /api/samples`) |
 | `/model-card` | built: specification, test tables with paired comparisons, stress-test chart and limitations, all from `GET /api/results/model-card` |
 
@@ -38,6 +38,30 @@ The API address comes from `API_URL` (server side) or `NEXT_PUBLIC_API_URL`, def
 `http://127.0.0.1:8010`. If the API is not running, the Overview still renders and the results
 section says so, with the command to start it.
 
+## 3D view
+
+The Segment results have a fourth view, **3D**, next to Axial, Coronal and Sagittal
+(`src/components/segment/Volume3D.tsx`). It loads the result's `mesh.glb` and draws:
+
+- the brain as glass, with a small fresnel shader;
+- the tumour layers in the finding colours, with a glow on the tumour only (selective bloom).
+
+**Controls:** drag to rotate and scroll or pinch to zoom, with damped, non-bouncing orbit
+controls. The label toggles and the overlay opacity slider act on the 3D layers as on the slices.
+
+**Libraries:** three.js with `@react-three/fiber`, `@react-three/drei` and
+`@react-three/postprocessing`. They load only when the 3D view is opened.
+
+**Performance:** the canvas renders only when something changes, and the pixel ratio is capped at
+1.5. The glass is a cheap shader rather than a transmission pass. It runs smoothly on an ordinary
+laptop GPU.
+
+**Failure handling:** without WebGL, the view shows a message and the rest of the screen is
+unchanged. If the surfaces fail to load, it shows the reason and a retry.
+
+The Overview's hero image links to `/segment?demo=3d`. That loads the sample study, runs it through
+the real upload and job, and opens the result in 3D.
+
 ## Hero image
 
 The Overview hero is a 3D render of a held-out test patient's brain and the ensemble's predicted
@@ -57,7 +81,7 @@ src/
   components/           SiteHeader, SiteFooter, ButtonLink, Button, icons, Metric, HeroVisual
     classify/           Classify screen: upload view, result view
     modelcard/          Model card: stress-test headline and chart, table styles
-    segment/            Segment screen: upload, processing (job polling), results viewer
+    segment/            Segment screen: upload, processing (job polling), results viewer, 3D view
     workspace/          layout and controls shared by both screens
   design/
     tokens.ts           the design system: colour, type scale, motion, spacing

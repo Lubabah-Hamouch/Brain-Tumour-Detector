@@ -33,6 +33,7 @@ class SegmentationResponse(BaseModel):
     mask_url: str = Field(description="GET this URL for the label map as .nii.gz (same grid and affine as the upload)")
     report_url: str = Field(description="GET this URL (optionally with plane, sequence, labels, opacity) for a PNG "
                                         "of one slice with the overlay, the volumes and identifiers")
+    mesh_url: str = Field(description="GET this URL for the brain and tumour surfaces as binary glTF (.glb)")
     mask_nifti_base64: str | None = Field(None, description="The same .nii.gz, inline, if inline_mask=true")
     labels: dict[str, int] = Field(description="Label values in the mask (BraTS convention)")
     regions: dict[str, RegionResult] = Field(description="WT (whole tumour), TC (tumour core), ET (enhancing tumour)")

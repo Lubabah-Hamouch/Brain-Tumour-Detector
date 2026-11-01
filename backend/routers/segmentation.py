@@ -144,6 +144,21 @@ async def download_report(
         "Content-Disposition": f'attachment; filename="segmentation_{result_id[:8]}_{plane}_{sequence}.png"'})
 
 
+@router.get("/segment/{result_id}/mesh.glb", response_class=Response,
+            responses={200: {"content": {"model/gltf-binary": {}}}, 404: {"model": ErrorResponse},
+                       500: {"model": ErrorResponse}},
+            summary="3D surfaces of a result (brain and tumour regions) as binary glTF",
+            description="Nodes `brain`, `edema` (whole-tumour outer surface), `necrotic` and `enhancing`, in "
+                        "millimetres, centred on the brain, Y up. Built with marching cubes and Taubin smoothing on "
+                        "the first request (about a second), then cached with the result.")
+async def mesh(request: Request, result_id: str):
+    service = request.app.state.segmenter
+    glb = await run_in_threadpool(service.mesh_glb, result_id) if service else None
+    if glb is None:
+        raise _not_kept(service, result_id)
+    return Response(glb, media_type="model/gltf-binary", headers={"Cache-Control": "private, max-age=3600"})
+
+
 def _sample_files():
     return {m: BRATS_DIR / SAMPLE_CASE / f"{SAMPLE_CASE}_{m}.nii.gz" for m in slices.SEQUENCES}
 

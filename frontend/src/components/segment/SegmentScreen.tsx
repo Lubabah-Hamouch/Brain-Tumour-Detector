@@ -1,6 +1,7 @@
 "use client";
 
-import { useCallback, useMemo, useRef, useState } from "react";
+import { useRouter, useSearchParams } from "next/navigation";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 
 import {
   ApiError,
@@ -24,8 +25,14 @@ let nextId = 0;
  * Segmentation workspace: four NIfTI files -> background job with live progress -> results.
  * The run's timing starts when the visitor presses Run: the upload and the server's checks are
  * measured here, the job's stages come from the job API.
+ *
+ * With ?demo=3d (the Overview's "View in 3D" link) the sample study is loaded and run straight
+ * away, through the same upload and job as any study, and the result opens in the 3D view.
  */
 export function SegmentScreen() {
+  const demo = useSearchParams().get("demo") === "3d";
+  const router = useRouter();
+  const demoStep = useRef<"idle" | "loading" | "started">("idle");
   const [files, setFiles] = useState<StudyFile[]>([]);
   const [sampleCase, setSampleCase] = useState<string | null>(null);
   const [loadingSample, setLoadingSample] = useState(false);
@@ -109,6 +116,28 @@ export function SegmentScreen() {
     }
   }, [evaluation, sampleCase]);
 
+  // Demo: load the sample once, then run it as soon as all four files pass their checks.
+  useEffect(() => {
+    if (demo && demoStep.current === "idle") {
+      demoStep.current = "loading";
+      void loadSample();
+    }
+  }, [demo, loadSample]);
+  useEffect(() => {
+    if (demo && demoStep.current === "loading" && evaluation.ready && !run) {
+      demoStep.current = "started";
+      void start();
+    }
+  }, [demo, evaluation.ready, run, start]);
+
+  const complete = useCallback(
+    (r: SegmentationResult) => {
+      setResult(r);
+      if (demo) setShowResults(true);
+    },
+    [demo],
+  );
+
   const backToFiles = useCallback(() => {
     setRun(null);
     setResult(null);
@@ -120,17 +149,26 @@ export function SegmentScreen() {
     setFiles([]);
     setSampleCase(null);
     setRunError(null);
-  }, [backToFiles]);
+    if (demo) router.replace("/segment");
+  }, [backToFiles, demo, router]);
 
   if (run && result && showResults) {
-    return <ResultsView key={result.result_id} result={result} run={run} onNewStudy={newStudy} />;
+    return (
+      <ResultsView
+        key={result.result_id}
+        result={result}
+        run={run}
+        onNewStudy={newStudy}
+        initialView={demo ? "3d" : "axial"}
+      />
+    );
   }
   if (run) {
     return (
       <ProcessingView
         key={run.id}
         run={run}
-        onComplete={setResult}
+        onComplete={complete}
         onShowResults={() => setShowResults(true)}
         onBack={backToFiles}
       />

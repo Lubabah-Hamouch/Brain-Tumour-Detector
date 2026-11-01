@@ -103,3 +103,42 @@
   height: 8px;
   margin-right: 8px;
 }
+
+/* The render links to the live 3D view of the same patient. */
+.link {
+  position: absolute;
+  inset: 0;
+  display: block;
+  color: inherit;
+  text-decoration: none;
+}
+
+.link:focus-visible {
+  outline-offset: -1px;
+}
+
+.cta {
+  position: absolute;
+  right: 0;
+  bottom: 12px;
+  font-size: var(--text-14);
+  color: var(--color-text-secondary);
+  transition: color var(--dur-hover) var(--ease);
+}
+
+.link:hover .cta {
+  color: var(--color-text-strong);
+}
+
+.link:hover .cta .u {
+  background-size: 100% 1px;
+}
+
+.captionLink {
+  color: var(--color-text-secondary);
+  text-decoration: none;
+}
+
+.captionLink:hover {
+  color: var(--color-text-strong);
+}

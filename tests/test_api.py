@@ -379,3 +379,34 @@ def test_model_card_matches_results_files(client):
     titles = [line.split("**")[1].rstrip(".") for line in final.split("## Limitations")[1].split("## Reproducing")[0].splitlines()
               if line.startswith("- **")]
     assert [x["title"] for x in card["limitations"]] == titles and len(titles) == 7
+
+
+def test_segment_mesh_glb(client, segmented):
+    """The 3D surfaces: a valid binary glTF with the four named surfaces, within budget, cached."""
+    import struct
+
+    from backend.services.meshes import SURFACES
+
+    _, body, _, _ = segmented
+    url = body["mesh_url"].replace("http://testserver", "")
+    r = client.get(url)
+    assert r.status_code == 200 and r.headers["content-type"] == "model/gltf-binary"
+    glb = r.content
+    magic, version, length = struct.unpack_from("<III", glb, 0)
+    assert (magic, version, length) == (0x46546C67, 2, len(glb))
+    json_length, json_type = struct.unpack_from("<II", glb, 12)
+    assert json_type == 0x4E4F534A
+    gltf = json.loads(glb[20:20 + json_length])
+    assert [n["name"] for n in gltf["nodes"]] == ["brain", "edema", "necrotic", "enhancing"]
+    budgets = {name: budget for name, _, budget, _, _ in SURFACES}
+    for mesh in gltf["meshes"]:
+        prim = mesh["primitives"][0]
+        triangles = gltf["accessors"][prim["indices"]]["count"] // 3
+        assert 0 < triangles <= budgets[mesh["name"]], mesh["name"]
+        assert gltf["accessors"][prim["attributes"]["POSITION"]]["count"] == gltf["accessors"][prim["attributes"]["NORMAL"]]["count"]
+    # Millimetres, centred on the brain: a BraTS brain spans roughly 120-180 mm.
+    brain = gltf["accessors"][gltf["meshes"][0]["primitives"][0]["attributes"]["POSITION"]]
+    extent = np.array(brain["max"]) - np.array(brain["min"])
+    assert ((extent > 100) & (extent < 200)).all() and np.allclose(np.array(brain["max"]) + np.array(brain["min"]), 0, atol=5)
+    assert client.get(url).content == glb  # served from the cache the second time
+    assert client.get("/api/segment/does-not-exist/mesh.glb").status_code == 404

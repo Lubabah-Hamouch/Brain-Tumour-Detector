@@ -133,6 +133,8 @@ export type SegmentationResult = {
   files: Partial<Record<SequenceField, string>>;
   mask_url: string;
   report_url: string;
+  /** Brain and tumour surfaces as binary glTF, built on first request. */
+  mesh_url: string;
   regions: Record<"WT" | "TC" | "ET", RegionResult>;
   shape: number[];
   spacing_mm: number[];

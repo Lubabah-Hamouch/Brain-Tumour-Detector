@@ -1,5 +1,6 @@
 "use client";
 
+import dynamic from "next/dynamic";
 import Image from "next/image";
 import { useState } from "react";
 
@@ -10,6 +11,21 @@ import type { LabelLayer, Plane, SegmentationResult, SequenceField } from "@/lib
 
 import styles from "./Segment.module.css";
 import type { Run } from "./types";
+
+// three.js is loaded only when the 3D view is opened, and never on the server.
+const Volume3D = dynamic(() => import("./Volume3D"), {
+  ssr: false,
+  loading: () => (
+    <div className={styles.volume} data-state="loading">
+      <div className={styles.volumeMessage}>
+        <p>Loading the 3D viewer…</p>
+      </div>
+    </div>
+  ),
+});
+
+/** The plane views plus the 3D surfaces. */
+export type View = Plane | "3d";
 
 const PLANES: { key: Plane; name: string; axis: string }[] = [
   { key: "axial", name: "Axial", axis: "z" },
@@ -33,10 +49,11 @@ const REGIONS = [
   { key: "ET", name: "Enhancing tumour", swatch: regionColor.ET, large: false },
 ] as const;
 
-type Props = { result: SegmentationResult; run: Run; onNewStudy: () => void };
+type Props = { result: SegmentationResult; run: Run; onNewStudy: () => void; initialView?: View };
 
-export function ResultsView({ result, run, onNewStudy }: Props) {
-  const [plane, setPlane] = useState<Plane>("axial");
+export function ResultsView({ result, run, onNewStudy, initialView = "axial" }: Props) {
+  const [view3d, setView3d] = useState(initialView === "3d");
+  const [plane, setPlane] = useState<Plane>(initialView === "3d" ? "axial" : initialView);
   const [sequence, setSequence] = useState<SequenceField>("flair");
   const [shown, setShown] = useState<Record<LabelLayer, boolean>>({ edema: true, necrotic: true, enhancing: true });
   const [opacity, setOpacity] = useState(100);
@@ -61,9 +78,10 @@ export function ResultsView({ result, run, onNewStudy }: Props) {
     labels: visible.map((l) => l.key).join(","),
     opacity: String(opacity),
   })}`;
-  const viewerLabel = `${run.sample ? "Real " : ""}${plane} ${seqName} slice of ${result.study} with predicted ${
-    visible.map((l) => l.name.toLowerCase()).join(", ") || "no labels"
-  } in red`;
+  const shownNames = visible.map((l) => l.name.toLowerCase()).join(", ") || "no labels";
+  const viewerLabel = view3d
+    ? `Interactive 3D view of ${result.study}: the brain surface and the predicted ${shownNames} in red`
+    : `${run.sample ? "Real " : ""}${plane} ${seqName} slice of ${result.study} with predicted ${shownNames} in red`;
 
   return (
     <div className={ws.screen}>
@@ -72,19 +90,28 @@ export function ResultsView({ result, run, onNewStudy }: Props) {
           {result.study} · {result.shape.join(" × ")} · {spacing.replace(" mm", "\u00a0mm")} · {total.toFixed(1)}{"\u00a0"}s
         </p>
         <div className={`label ${ws.viewerHead}`}>
-          <span>
-            {planeDef.name} ·{" "}
-            <span className="mono">
-              {planeDef.axis} {view.index} / {view.count}
+          {view3d ? (
+            <span>3D · brain and tumour surfaces</span>
+          ) : (
+            <span>
+              {planeDef.name} ·{" "}
+              <span className="mono">
+                {planeDef.axis} {view.index} / {view.count}
+              </span>
             </span>
-          </span>
+          )}
           <span>
-            {seqName} · overlay <span className="mono">{opacity}%</span>
+            {view3d ? "Labels" : seqName} · overlay <span className="mono">{opacity}%</span>
           </span>
         </div>
 
-        <div className={ws.viewer} role="img" aria-label={viewerLabel}>
-          <div className={ws.viewerInner}>
+        <div className={ws.viewer} role={view3d ? "group" : "img"} aria-label={viewerLabel}>
+          {view3d && (
+            <div className={styles.volumeFrame}>
+              <Volume3D url={result.mesh_url} visible={shown} opacity={opacity / 100} />
+            </div>
+          )}
+          <div className={ws.viewerInner} style={{ opacity: view3d ? 0 : 1 }} aria-hidden={view3d}>
             {PLANES.map((p) => {
               const layers = result.slices[p.key].layers;
               return (
@@ -122,10 +149,27 @@ export function ResultsView({ result, run, onNewStudy }: Props) {
         <div className={ws.toolbar} role="toolbar" aria-label="Viewer controls">
           <div className={ws.modes} role="group" aria-label="Plane">
             {PLANES.map((p) => (
-              <button key={p.key} type="button" className={`${ws.mode} ${styles.planeButton}`} aria-pressed={plane === p.key} onClick={() => setPlane(p.key)}>
+              <button
+                key={p.key}
+                type="button"
+                className={`${ws.mode} ${styles.planeButton}`}
+                aria-pressed={!view3d && plane === p.key}
+                onClick={() => {
+                  setPlane(p.key);
+                  setView3d(false);
+                }}
+              >
                 {p.name}
               </button>
             ))}
+            <button
+              type="button"
+              className={`${ws.mode} ${styles.planeButton}`}
+              aria-pressed={view3d}
+              onClick={() => setView3d(true)}
+            >
+              3D
+            </button>
           </div>
           <div className={ws.modes} role="group" aria-label="Base sequence">
             {SEQUENCES.map((s) => (
@@ -134,6 +178,8 @@ export function ResultsView({ result, run, onNewStudy }: Props) {
                 type="button"
                 className={`${ws.mode} ${styles.seqButton}`}
                 aria-pressed={sequence === s.key}
+                disabled={view3d}
+                title={view3d ? "Sequences apply to the slice views" : undefined}
                 onClick={() => setSequence(s.key)}
               >
                 {s.name}
@@ -203,12 +249,19 @@ export function ResultsView({ result, run, onNewStudy }: Props) {
           <a className={ws.download} href={result.mask_url} download>
             Download label map (.nii.gz)
           </a>
-          <a className={styles.ghostLink} href={reportUrl} download>
-            Download {plane} overlay (PNG)
-          </a>
+          {view3d ? (
+            <a className={styles.ghostLink} href={result.mesh_url} download={`${result.study}_surfaces.glb`}>
+              Download 3D surfaces (.glb)
+            </a>
+          ) : (
+            <a className={styles.ghostLink} href={reportUrl} download>
+              Download {plane} overlay (PNG)
+            </a>
+          )}
           <span className="caption">
-            The label map is the full 3D result for viewers such as ITK-SNAP. The PNG is the slice on screen with the
-            overlay burned in, for slides and reports.
+            {view3d
+              ? "The label map is the full 3D result for viewers such as ITK-SNAP. The .glb holds the surfaces shown here, for any glTF viewer or 3D tool."
+              : "The label map is the full 3D result for viewers such as ITK-SNAP. The PNG is the slice on screen with the overlay burned in, for slides and reports."}
           </span>
           <button type="button" className={ws.textButton} onClick={onNewStudy}>
             <span className="u">New study</span>

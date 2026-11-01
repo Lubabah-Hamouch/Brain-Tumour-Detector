@@ -9,8 +9,9 @@ FastAPI service for the two trained models:
 - **`POST /api/segment`**: 3D tumour segmentation (WT/TC/ET) from the four BraTS MRI sequences.
   The model is the 5-fold U-Net ensemble with enhancing-tumour post-processing. It runs as a
   background job, polled with **`GET /api/jobs/{job_id}`**. Each result has viewer slices
-  (**`GET /api/segment/{result_id}/slices/{plane}/{layer}.png`**), the label map download and a PNG
-  report (**`GET /api/segment/{result_id}/report.png`**).
+  (**`GET /api/segment/{result_id}/slices/{plane}/{layer}.png`**), 3D surfaces
+  (**`GET /api/segment/{result_id}/mesh.glb`**), the label map download and a PNG report
+  (**`GET /api/segment/{result_id}/report.png`**).
 - **`GET /api/sample-study`**: a held-out BraTS test study for trying the segmentation without data.
 - **`GET /api/results/summary`**: the headline held-out test results, read from
   `reports/results/`, for the frontend's Overview.
@@ -47,7 +48,7 @@ Settings come from environment variables:
 | `BT_ET_MIN_VOXELS` | tuned value (50) | enhancing-tumour component size threshold |
 | `BT_CORS_ORIGINS` | `localhost` / `127.0.0.1` on ports 3000 and 5173 | allowed frontend origins, comma-separated |
 | `BT_MAX_IMAGE_MB` / `BT_MAX_VOLUME_MB` | 20 / 200 | upload limits |
-| `BT_RESULT_CACHE_SIZE` | 16 | recent results kept for download: segmentation masks and viewer slices, classification reports, finished jobs |
+| `BT_RESULT_CACHE_SIZE` | 16 | recent results kept for download: segmentation masks, viewer slices and 3D surfaces, classification reports, finished jobs |
 
 The default `BT_ET_MIN_VOXELS` is read from `reports/results/segmentation_test.json`, where it was
 tuned on validation data.
@@ -225,6 +226,7 @@ A 240 × 240 × 155 study takes about 5-6 s on an RTX 4060 Laptop GPU, 3.5 s of 
   "files": {"flair": "BraTS2021_00003_flair.nii.gz", "t1": "...", "t1ce": "...", "t2": "..."},
   "mask_url": "http://localhost:8010/api/segment/3f0c.../mask.nii.gz",
   "report_url": "http://localhost:8010/api/segment/3f0c.../report.png",
+  "mesh_url": "http://localhost:8010/api/segment/3f0c.../mesh.glb",
   "mask_nifti_base64": null,
   "labels": {"necrotic_core": 1, "edema": 2, "enhancing_tumour": 4},
   "regions": {
@@ -296,6 +298,31 @@ small 2D slices are kept per result; each PNG is drawn on first request and cach
 **Previews:** three PNG slices (axial, coronal, sagittal) through the largest tumour cross-section.
 Each shows FLAIR with the labels overlaid: red for necrotic core, green for edema, yellow for
 enhancing tumour. They are for quick display only; render the NIfTI for anything interactive.
+
+## `GET /api/segment/{result_id}/mesh.glb`
+
+The brain and the predicted tumour regions as 3D surfaces, in one binary glTF file (`.glb`). The
+web client's 3D view loads it, and any glTF viewer or 3D tool can open it.
+
+- **Nodes:**
+  - `brain`: the non-zero region of the four sequences, holes filled;
+  - `edema`: the whole-tumour outer surface (labels 1, 2 and 4);
+  - `necrotic`: the necrotic core (label 1);
+  - `enhancing`: the enhancing tumour (label 4).
+- **Coordinates:** millimetres from the NIfTI voxel spacing, centred on the brain, Y up. The scene's
+  `extras` hold the brain's radius and a default viewing direction.
+- **How it is built** (`backend/services/meshes.py`), the same way as the Overview's static render:
+  - each mask is Gaussian-smoothed and turned into a surface with marching cubes (scikit-image);
+  - each surface is smoothed with Taubin's method, which does not shrink it;
+  - vertex normals are computed.
+- **Size:** each surface has a triangle budget (brain 90,000, tumour layers 30,000-50,000) for smooth
+  rendering on an ordinary laptop. When marching cubes at full resolution exceeds the budget, its
+  sampling step is coarsened. For a BraTS study the file is about 2.5 MB and about 140,000
+  triangles.
+- **When:** built on the first request, in about a second, then cached with the result. The cached
+  result keeps the label map and a bit-packed brain mask for this, not the volumes.
+- **Failure:** returns the usual error JSON. A failure is not cached, so the next request tries
+  again.
 
 ## `GET /api/segment/{result_id}/report.png`
 
@@ -391,6 +418,8 @@ The tests need the checkpoints and local datasets; they are skipped without them
   (±0.005);
 - that a segmentation job passes through the real stages in order;
 - that the classification report renders, and that only the listed samples are served;
+- that the 3D surfaces are a valid glTF file with the four named surfaces, within their triangle
+  budgets, centred and in millimetres, and served from the cache the second time;
 - that every segmentation viewer layer is served with matching sizes and follows the label map, that
   the segmentation report renders with the requested plane and sequence, and that only the sample
   study's four files are served;

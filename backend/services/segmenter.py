@@ -12,9 +12,10 @@ The region masks are combined into a BraTS label map (1 necrotic core, 2 edema, 
 and placed back into the uploaded volume's grid (uncrop), so the returned NIfTI overlays the
 input directly.
 
-Each result is kept in memory (the most recent `cache_size`) with the label map and one display
-slice per plane (backend/services/slices.py), for the label-map download, the viewer's slice
-images and the PNG report.
+Each result is kept in memory (the most recent `cache_size`) with the label map, one display
+slice per plane (backend/services/slices.py) and the brain mask (bit-packed), for the label-map
+download, the viewer's slice images, the PNG report and the 3D surfaces
+(backend/services/meshes.py, built on first request).
 """
 import base64
 import gzip
@@ -30,7 +31,7 @@ import torch
 
 from backend.services.cache import ResultCache
 from backend.services.errors import ApiError, relative_name
-from backend.services import slices
+from backend.services import meshes, slices
 from backend.services.imaging import label_overlay, png_base64
 from backend.services.report import segmentation_report
 from src.data.segmentation_preprocess import ALL_MODALITIES, load_modality, preprocess_image, uncrop
@@ -100,6 +101,7 @@ class SegmenterService:
         self.cache = ResultCache(cache_size)
         self.checkpoint_dir = relative_name(Path(checkpoint_dir))
         self._lock = threading.Lock()  # one volume at a time on the GPU
+        self._mesh_lock = threading.Lock()  # build each result's surfaces once
 
     def load_study(self, files):
         """files: {modality: (filename, bytes)} -> (image (4, X, Y, Z), reference nibabel image, warnings)."""
@@ -198,7 +200,10 @@ class SegmenterService:
         nifti.header.set_xyzt_units("mm")
         mask_bytes = gzip.compress(nifti.to_bytes(), compresslevel=6)
         views = slices.extract(image, labels)
+        # Non-zero voxels only: filling holes for the 3D brain surface waits until a mesh is requested.
+        nonzero = np.any(image != 0, axis=0)
         entry = {"mask": mask_bytes, "views": views, "png": {}, "study": study["study"], "shape": shape,
+                 "brain_bits": np.packbits(nonzero), "glb": None,
                  "spacing": spacing, "regions": region_results}
         result_id = self.cache.put(entry)
         entry["result_id"] = result_id
@@ -211,6 +216,7 @@ class SegmenterService:
             "files": study.get("files", {}),
             "mask_url": f"{segment_url}/mask.nii.gz",
             "report_url": f"{segment_url}/report.png",
+            "mesh_url": f"{segment_url}/mesh.glb",
             "mask_nifti_base64": base64.b64encode(mask_bytes).decode("ascii") if inline_mask else None,
             "labels": BRATS_LABELS,
             "regions": region_results,
@@ -248,6 +254,20 @@ class SegmenterService:
         if key not in entry["png"]:
             entry["png"][key] = slices.layer_png(entry["views"][plane], layer)
         return entry["png"][key]
+
+    def mesh_glb(self, result_id):
+        """The result's 3D surfaces as binary glTF, built on first request; None if no longer kept."""
+        entry = self.cache.get(result_id)
+        if entry is None:
+            return None
+        with self._mesh_lock:
+            if entry["glb"] is None:
+                shape = tuple(entry["shape"])
+                nonzero = np.unpackbits(entry["brain_bits"], count=int(np.prod(shape))).reshape(shape).astype(bool)
+                brain = meshes.fill(nonzero)
+                labels = np.asarray(nib.Nifti1Image.from_bytes(gzip.decompress(entry["mask"])).dataobj)
+                entry["glb"], entry["mesh_summary"] = meshes.build_glb(brain, labels, entry["spacing"])
+        return entry["glb"]
 
     def report_png(self, result_id, plane, sequence, labels, opacity):
         """The slice on screen with the overlay burned in, plus volumes and identifiers, as one PNG."""

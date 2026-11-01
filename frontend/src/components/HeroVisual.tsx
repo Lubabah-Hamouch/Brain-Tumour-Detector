@@ -2,6 +2,7 @@ import { existsSync } from "node:fs";
 import path from "node:path";
 
 import Image from "next/image";
+import Link from "next/link";
 
 import { regionColor } from "@/design/tokens";
 
@@ -18,13 +19,16 @@ const LEGEND = [
   { label: "Enhancing", color: regionColor.ET },
 ];
 
-/** Static 3D render of a held-out test patient; stands in for the planned interactive 3D view. */
+/**
+ * Static 3D render of a held-out test patient. It links to the live version: the Segment screen
+ * runs the same patient through the models and opens the result in its interactive 3D view.
+ */
 export function HeroVisual() {
   return (
     <figure className={styles.figure}>
       <div className={styles.frame}>
         {HERO_AVAILABLE ? (
-          <>
+          <Link href="/segment?demo=3d" className={styles.link} aria-label="View this patient in 3D: run the segmentation and open the interactive 3D view">
             <Image
               src={HERO_SRC}
               alt="3D render of held-out test patient BraTS2021_00003: a translucent brain surface with the ensemble's predicted tumour regions inside it in shades of red"
@@ -34,7 +38,10 @@ export function HeroVisual() {
               className={styles.image}
             />
             <div aria-hidden="true" className={styles.sweep} />
-          </>
+            <span className={styles.cta} aria-hidden="true">
+              <span className="u">View in 3D</span> →
+            </span>
+          </Link>
         ) : (
           <p className={styles.missing}>
             Hero image not generated yet. From the project root run{" "}
@@ -51,7 +58,12 @@ export function HeroVisual() {
             </span>
           ))}
         </span>
-        <span>BraTS2021_00003 · held-out test patient · 3D surfaces of the brain and the ensemble prediction</span>
+        <span>
+          BraTS2021_00003 · held-out test patient · 3D surfaces of the brain and the ensemble prediction ·{" "}
+          <Link href="/segment?demo=3d" className={styles.captionLink}>
+            <span className="u">open it live in 3D</span>
+          </Link>
+        </span>
       </figcaption>
     </figure>
   );
