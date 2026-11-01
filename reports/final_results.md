@@ -700,8 +700,9 @@ change under resizing.
   - `Te-gl_97` (T2) and `Te-gl_318` (CT) are still called "no tumour". These are the scan-type
     coverage gaps described above, and longer training does not address them.
 - **Remaining weak spot:** false alarms on no-tumour images, 8 of 259.
-  - Three are the sella-level slices seen before, called pituitary.
-  - One (`Tr-no_215`) is called glioma at 0.92.
+  - Five are sella-level slices called pituitary: `Tr-no_173`, `_344` and `_674`, also errors of the
+    original model, and `Tr-no_539` and `_543`, also errors of the crop model.
+  - Three are called glioma: `Tr-no_261` at 1.00, `Tr-no_215` at 0.92 and `Tr-no_144` at 0.52.
 
 ### Why the patience-10 model is primary
 
@@ -754,8 +755,9 @@ change under resizing.
   glioma and a CT image in the test set are called "no tumour" by the format-robust model. The
   classifier should not be expected to handle sequences or modalities it has rarely seen.
 - **The classifier also confuses anatomy with pathology at the sella.** Normal slices through the
-  sella turcica can be called "pituitary" (4 test images), because the pituitary class is dominated
-  by those views.
+  sella turcica can be called "pituitary" (all 5 of the primary model's no-tumour images called
+  pituitary are axial skull-base slices at that level), because the pituitary class is dominated by
+  those views.
 - **Classification is slice-level.** The 4-class dataset is a collection of single 2D slices
   without patient identifiers. Near-duplicate clustering prevents the most direct leakage, but
   different slices of the same patient could still fall in different splits. The test accuracy
