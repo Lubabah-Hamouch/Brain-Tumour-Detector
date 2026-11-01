@@ -1,5 +1,7 @@
 "use client";
 
+import type { ReactNode } from "react";
+
 import { useEntryProgress } from "@/design/useEntryProgress";
 
 import styles from "./Metric.module.css";
@@ -17,7 +19,7 @@ export function HeroMetric({
   unit,
   barMax = 1,
 }: {
-  label: string;
+  label: ReactNode;
   value: number;
   decimals: number;
   scale?: number;
@@ -40,7 +42,7 @@ export function HeroMetric({
 }
 
 /** A compact row: name, thin bar and value, counting up with the hero number above it. */
-export function MetricRow({ name, value, decimals }: { name: string; value: number; decimals: number }) {
+export function MetricRow({ name, value, decimals }: { name: ReactNode; value: number; decimals: number }) {
   const e = useEntryProgress();
   return (
     <div className={styles.row}>

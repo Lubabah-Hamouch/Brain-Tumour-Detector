@@ -4,6 +4,7 @@ import dynamic from "next/dynamic";
 import Image from "next/image";
 import { useState } from "react";
 
+import { Term } from "@/components/Term";
 import ws from "@/components/workspace/Workspace.module.css";
 import { regionColor } from "@/design/tokens";
 import { useEntryProgress } from "@/design/useEntryProgress";
@@ -44,9 +45,9 @@ const LABELS: { key: LabelLayer; value: number; name: string; swatch: string }[]
   { key: "enhancing", value: 4, name: "Enhancing", swatch: regionColor.ET },
 ];
 const REGIONS = [
-  { key: "WT", name: "Whole tumour", swatch: regionColor.WT, large: true },
-  { key: "TC", name: "Tumour core", swatch: regionColor.TC, large: false },
-  { key: "ET", name: "Enhancing tumour", swatch: regionColor.ET, large: false },
+  { key: "WT", term: "wt", name: "Whole tumour", swatch: regionColor.WT, large: true },
+  { key: "TC", term: "tc", name: "Tumour core", swatch: regionColor.TC, large: false },
+  { key: "ET", term: "et", name: "Enhancing tumour", swatch: regionColor.ET, large: false },
 ] as const;
 
 type Props = { result: SegmentationResult; run: Run; onNewStudy: () => void; initialView?: View };
@@ -185,6 +186,9 @@ export function ResultsView({ result, run, onNewStudy, initialView = "axial" }: 
                 {s.name}
               </button>
             ))}
+            <span className={styles.groupTerm}>
+              <Term k="sequences" />
+            </span>
           </div>
           <label className={`label ${ws.heat} ${styles.opacity}`}>
             <span>Opacity</span>
@@ -211,6 +215,9 @@ export function ResultsView({ result, run, onNewStudy, initialView = "axial" }: 
               <span className="mono">{l.value}</span> {l.name}
             </button>
           ))}
+          <span className={styles.legendTerm}>
+            <Term k="labels" />
+          </span>
         </div>
       </main>
 
@@ -222,7 +229,9 @@ export function ResultsView({ result, run, onNewStudy, initialView = "axial" }: 
               <div key={r.key} className={styles.region}>
                 <span className={`label ${styles.regionLabel}`}>
                   <span className={styles.swatchSmall} style={{ background: r.swatch }} />
-                  {r.key} · {r.name}
+                  <Term k={r.term}>
+                    {r.key} · {r.name}
+                  </Term>
                 </span>
                 <span className={`mono ${styles.volume}`} data-large={r.large}>
                   {(region.volume_ml * e).toFixed(2)}
@@ -232,7 +241,8 @@ export function ResultsView({ result, run, onNewStudy, initialView = "axial" }: 
                   <div className={styles.shareFill} style={{ width: `${(region.volume_ml / wt) * 100 * e}%` }} />
                 </div>
                 <span className="mono caption">
-                  agreement {region.model_agreement.toFixed(3)} · mean p{" "}
+                  <Term k="agreement">agreement</Term> {region.model_agreement.toFixed(3)} ·{" "}
+                  <Term k="meanP">mean p</Term>{" "}
                   {region.mean_probability === null ? "–" : region.mean_probability.toFixed(3)}
                 </span>
               </div>
@@ -259,9 +269,14 @@ export function ResultsView({ result, run, onNewStudy, initialView = "axial" }: 
             </a>
           )}
           <span className="caption">
-            {view3d
-              ? "The label map is the full 3D result for viewers such as ITK-SNAP. The .glb holds the surfaces shown here, for any glTF viewer or 3D tool."
-              : "The label map is the full 3D result for viewers such as ITK-SNAP. The PNG is the slice on screen with the overlay burned in, for slides and reports."}
+            The <Term k="mask">label map</Term> is the full 3D result for viewers such as ITK-SNAP.{" "}
+            {view3d ? (
+              <>
+                The <Term k="glb">.glb</Term> holds the surfaces shown here, for any glTF viewer or 3D tool.
+              </>
+            ) : (
+              "The PNG is the slice on screen with the overlay burned in, for slides and reports."
+            )}
           </span>
           <button type="button" className={ws.textButton} onClick={onNewStudy}>
             <span className="u">New study</span>

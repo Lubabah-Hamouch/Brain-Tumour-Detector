@@ -5,7 +5,8 @@ import { useId, useRef, useState, type DragEvent } from "react";
 
 import { Button } from "@/components/Button";
 import { CheckIcon, ErrorIcon } from "@/components/icons";
-import type { Sample } from "@/lib/api";
+import { Term } from "@/components/Term";
+import { CLASS_LABELS, type Sample } from "@/lib/api";
 import { formatBytes, MAX_IMAGE_MB, MIN_SIDE } from "@/lib/imageCheck";
 
 import styles from "@/components/workspace/Workspace.module.css";
@@ -43,19 +44,57 @@ export function UploadView(props: Props) {
     ? `${info.format} · ${info.width} × ${info.height} · ${info.grayscale ? "grayscale" : "colour"}`
     : problem
       ? problem.message
-      : "Drop an image or choose a sample";
+      : "Drop an image here or browse for one";
 
   return (
     <div className={styles.screen}>
       <main className={styles.main}>
         <div className={styles.intro}>
           <p className="label">Classification · upload</p>
-          <h1 className={styles.title}>Add one 2D MRI slice</h1>
+          <h1 className={styles.title}>Name the tumour type in one MRI image</h1>
+          <p className={styles.lede}>
+            The model looks at a single <Term k="slice">2D slice</Term> and says which of{" "}
+            <Term k="classes">four classes</Term> it shows, with a map of where it looked.
+          </p>
         </div>
 
+        <section className={styles.tryPanel} aria-labelledby="try-classify">
+          <div className={styles.tryText}>
+            <p className="label">Try it now</p>
+            <h2 id="try-classify" className={styles.tryTitle}>
+              Classify an image from the test set
+            </h2>
+            <p className="caption">
+              One click runs the model. These images were never used in training; the glioma is a{" "}
+              <Term k="knownError">known error</Term>.
+            </p>
+          </div>
+          <div className={styles.tryOptions}>
+            {samples?.map((sample, i) => (
+              <button
+                key={sample.name}
+                type="button"
+                className={styles.tryOption}
+                data-primary={i === 0}
+                disabled={running}
+                onClick={() => props.onSample(sample)}
+              >
+                <span>{CLASS_LABELS[sample.true_class] ?? sample.true_class}</span>
+                <SampleNote sample={sample} name />
+              </button>
+            ))}
+            {!samples && (
+              <p className={`caption ${styles.tryPending}`}>
+                {samplesError ? `Samples unavailable: ${samplesError}` : "Loading samples…"}
+              </p>
+            )}
+          </div>
+        </section>
+
+        <p className={`label ${styles.ownLabel}`}>Or add your own image</p>
         <label
           htmlFor={inputId}
-          className={styles.drop}
+          className={`${styles.drop} ${info ? "" : styles.dropCompact}`}
           data-state={info ? "ready" : dragging ? "dragging" : "empty"}
           onDragOver={(event) => {
             event.preventDefault();
@@ -145,29 +184,11 @@ export function UploadView(props: Props) {
           )}
         </section>
 
-        <section>
-          <p className={`label ${styles.sectionLabel}`}>Or use a test-set sample</p>
-          {samples?.map((sample) => (
-            <button
-              key={sample.name}
-              type="button"
-              className={styles.sample}
-              aria-pressed={selected?.sample?.name === sample.name}
-              onClick={() => props.onSample(sample)}
-            >
-              <span className="mono">{sample.name}</span>
-              <SampleNote sample={sample} />
-            </button>
-          ))}
-          {!samples && (
-            <p className={styles.samplePending}>{samplesError ? `Samples unavailable: ${samplesError}` : "Loading samples…"}</p>
-          )}
-          <div className={styles.rule} />
-        </section>
-
         <section className={styles.advice}>
           <p className="label">What works best</p>
-          <span>One axial, coronal or sagittal slice, ideally contrast-enhanced T1</span>
+          <span>
+            One axial, coronal or sagittal slice, ideally <Term k="sequences">contrast-enhanced T1</Term>
+          </span>
           <span>T2, FLAIR and CT images are poorly covered by the training data</span>
         </section>
 

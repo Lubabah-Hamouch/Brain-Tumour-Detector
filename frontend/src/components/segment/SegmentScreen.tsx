@@ -33,6 +33,8 @@ export function SegmentScreen() {
   const demo = useSearchParams().get("demo") === "3d";
   const router = useRouter();
   const demoStep = useRef<"idle" | "loading" | "started">("idle");
+  // Set by "Run the sample patient": start the job as soon as the sample's files pass their checks.
+  const runWhenReady = useRef(false);
   const [files, setFiles] = useState<StudyFile[]>([]);
   const [sampleCase, setSampleCase] = useState<string | null>(null);
   const [loadingSample, setLoadingSample] = useState(false);
@@ -127,8 +129,16 @@ export function SegmentScreen() {
     if (demo && demoStep.current === "loading" && evaluation.ready && !run) {
       demoStep.current = "started";
       void start();
+    } else if (runWhenReady.current && sampleCase && evaluation.ready && !run) {
+      runWhenReady.current = false;
+      void start();
     }
-  }, [demo, evaluation.ready, run, start]);
+  }, [demo, evaluation.ready, run, start, sampleCase]);
+
+  const runSample = useCallback(() => {
+    runWhenReady.current = true;
+    void loadSample();
+  }, [loadSample]);
 
   const complete = useCallback(
     (r: SegmentationResult) => {
@@ -184,7 +194,7 @@ export function SegmentScreen() {
       onAdd={(list) => addFiles(list)}
       onAssign={(id, seq) => setFiles((fs) => fs.map((f) => (f.id === id ? { ...f, assigned: seq } : f)))}
       onRemove={(id) => setFiles((fs) => fs.filter((f) => f.id !== id))}
-      onSample={loadSample}
+      onSample={runSample}
       onRun={start}
     />
   );

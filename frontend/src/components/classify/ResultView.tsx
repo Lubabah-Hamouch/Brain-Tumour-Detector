@@ -3,6 +3,7 @@
 import Image from "next/image";
 import { useId, useState } from "react";
 
+import { Term } from "@/components/Term";
 import { useEntryProgress } from "@/design/useEntryProgress";
 import { CLASS_LABELS, type ClassificationResult, type ResultsSummary, type Sample } from "@/lib/api";
 
@@ -63,9 +64,11 @@ export function ResultView({ result, selected, summary, samples, running, onFile
         </p>
         <div className={`label ${styles.viewerHead}`}>
           <span>
-            Model input · <span className="mono">{size} × {size}</span> letterbox
+            Model input · <span className="mono">{size} × {size}</span> <Term k="letterbox">letterbox</Term>
           </span>
-          <span>Grad-CAM · {mode}</span>
+          <span>
+            <Term k="gradcam">Grad-CAM</Term> · {mode}
+          </span>
         </div>
 
         <div
@@ -130,7 +133,9 @@ export function ResultView({ result, selected, summary, samples, running, onFile
         </section>
 
         <section>
-          <p className={`label ${styles.sectionLabel}`}>All classes</p>
+          <p className={`label ${styles.sectionLabel}`}>
+            <Term k="classes">All classes</Term>
+          </p>
           <ul className={styles.probs}>
             {ranked.map(([cls, p]) => {
               const lead = cls === result.predicted_class;

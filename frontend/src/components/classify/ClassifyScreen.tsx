@@ -134,7 +134,7 @@ export function ClassifyScreen() {
       samples={samples}
       samplesError={samplesError}
       onFile={accept}
-      onSample={loadSample}
+      onSample={(sample) => rerun(loadSample(sample))}
       onClear={reset}
       onClassify={() => selected && run(selected)}
     />

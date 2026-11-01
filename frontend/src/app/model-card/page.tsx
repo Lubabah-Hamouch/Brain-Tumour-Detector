@@ -3,6 +3,7 @@ import { Suspense, type ReactNode } from "react";
 
 import { StressChart } from "@/components/modelcard/StressChart";
 import { StressHeadline } from "@/components/modelcard/StressHeadline";
+import { Term } from "@/components/Term";
 import styles from "@/components/modelcard/ModelCard.module.css";
 import { ApiError, ApiUnavailable, getModelCard, type ModelCard, type PairedComparison } from "@/lib/api";
 
@@ -114,8 +115,13 @@ async function ModelCardContent() {
           {sameAccuracy
             ? `On natural test images both models score ${pct(h.served_accuracy)}`
             : `On natural test images the served model scores ${pct(h.served_accuracy)} and the original ${pct(h.original_accuracy)}`}
-          {h.mcnemar_p !== null &&
-            ` and are ${h.mcnemar_p >= 0.05 ? "statistically indistinguishable" : "significantly different"} (McNemar p = ${pValue(h.mcnemar_p)})`}
+          {h.mcnemar_p !== null && (
+            <>
+              {` and are ${h.mcnemar_p >= 0.05 ? "statistically indistinguishable" : "significantly different"} (`}
+              <Term k="mcnemar">McNemar</Term>
+              {` p = ${pValue(h.mcnemar_p)})`}
+            </>
+          )}
           . The difference only appears when file format stops matching the source each class came from, which is why
           the served model was chosen. Every number on this page comes from held-out test data.
         </p>
@@ -153,15 +159,21 @@ async function ModelCardContent() {
             <h2 id="mc-seg" className={styles.h2}>
               Segmentation
             </h2>
-            <span className="label">{seg.test_patients} test patients · Dice</span>
+            <span className="label">
+              {seg.test_patients} test patients · <Term k="dice">Dice</Term>
+            </span>
           </div>
           <div className={styles.scroll}>
             <table className={`${styles.data} ${styles.segTable}`}>
               <thead>
                 <tr>
                   <th scope="col">Model</th>
-                  <th scope="col">ET clean-up</th>
-                  <th scope="col">WT</th>
+                  <th scope="col">
+                    <Term k="etCleanup">ET clean-up</Term>
+                  </th>
+                  <th scope="col">
+                    <Term k="regions">WT</Term>
+                  </th>
                   <th scope="col">TC</th>
                   <th scope="col">ET</th>
                   <th scope="col">Mean</th>
@@ -185,11 +197,11 @@ async function ModelCardContent() {
             </table>
           </div>
           <div className={styles.findings}>
-            <Finding value={signed(ens.difference)} title="Ensemble vs best single fold">
+            <Finding value={signed(ens.difference)} title={<Term k="pairedCi">Ensemble vs best single fold</Term>}>
               95% CI <span className="mono">{signed(ens.ci95[0])}</span> to <span className="mono">{signed(ens.ci95[1])}</span>
               {significant(ens) ? "" : ", not significant"} · better for {ens.patients_better} of {seg.test_patients} patients
             </Finding>
-            <Finding value={signed(cleanup.difference)} title="ET clean-up">
+            <Finding value={signed(cleanup.difference)} title={<Term k="etCleanup">ET clean-up</Term>}>
               95% CI <span className="mono">{signed(cleanup.ci95[0])}</span> to{" "}
               <span className="mono">{signed(cleanup.ci95[1])}</span>
               {significant(cleanup) ? "" : ", not significant"} · the gain comes from the {noEt} patients without enhancing
@@ -202,7 +214,7 @@ async function ModelCardContent() {
                   {dice(seg.cross_validation.mean)} <span className={styles.findingSpread}>± {dice(seg.cross_validation.std)}</span>
                 </>
               }
-              title={`${seg.cross_validation.folds}-fold cross-validation`}
+              title={<Term k="crossValidation">{`${seg.cross_validation.folds}-fold cross-validation`}</Term>}
             >
               Mean Dice across folds (± standard deviation), each on the validation fold that chose its checkpoint
             </Finding>
@@ -225,8 +237,12 @@ async function ModelCardContent() {
                   <th scope="col">Model</th>
                   <th scope="col">Training change</th>
                   <th scope="col">Accuracy</th>
-                  <th scope="col">Macro F1</th>
-                  <th scope="col">At 128 px</th>
+                  <th scope="col">
+                    <Term k="macroF1">Macro F1</Term>
+                  </th>
+                  <th scope="col">
+                    <Term k="stress128">At 128 px</Term>
+                  </th>
                 </tr>
               </thead>
               <tbody>
@@ -294,7 +310,7 @@ async function ModelCardContent() {
   );
 }
 
-function Finding({ value, title, children }: { value: ReactNode; title: string; children: ReactNode }) {
+function Finding({ value, title, children }: { value: ReactNode; title: ReactNode; children: ReactNode }) {
   return (
     <div className={styles.finding}>
       <span className={`mono ${styles.findingValue}`}>{value}</span>

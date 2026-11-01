@@ -45,11 +45,26 @@ export default function Volume3D({ url, visible, opacity }: Props) {
   const [ready, setReady] = useState(false);
   const [failure, setFailure] = useState<string | null>(null);
   const [attempt, setAttempt] = useState(0);
+  // A one-time cue that the view can be moved: shown when the surfaces appear, gone after a few
+  // seconds or at the first drag or scroll.
+  const [hint, setHint] = useState(true);
   const state: State = !supported ? "unsupported" : failure ? "error" : ready ? "ready" : "loading";
+
+  useEffect(() => {
+    if (state !== "ready") return;
+    const timer = window.setTimeout(() => setHint(false), 4000);
+    return () => window.clearTimeout(timer);
+  }, [state]);
   const shown = (Object.keys(visible) as LabelLayer[]).filter((k) => visible[k]);
 
   return (
-    <div className={styles.volume} data-state={state} data-layers={shown.join(",")}>
+    <div
+      className={styles.volume}
+      data-state={state}
+      data-layers={shown.join(",")}
+      onPointerDown={() => setHint(false)}
+      onWheel={() => setHint(false)}
+    >
       {supported && !failure && (
         <LoadBoundary key={attempt} onError={setFailure}>
           <Canvas
@@ -74,7 +89,17 @@ export default function Volume3D({ url, visible, opacity }: Props) {
         </LoadBoundary>
       )}
       {state === "loading" && <Loading />}
-      {state === "ready" && <p className={`caption ${styles.volumeHint}`}>Drag to rotate · scroll or pinch to zoom</p>}
+      {state === "ready" && (
+        <>
+          <p className={styles.volumeCue} data-hidden={!hint} aria-hidden={!hint}>
+            <svg width="20" height="20" viewBox="0 0 20 20" aria-hidden="true">
+              <path d="M16 10a6 6 0 1 1-1.8-4.3M16 3v3.5h-3.5" fill="none" stroke="currentColor" strokeWidth="1.4" />
+            </svg>
+            Drag to rotate · Scroll to zoom
+          </p>
+          <p className={`caption ${styles.volumeHint}`}>3D · drag to rotate · scroll or pinch to zoom</p>
+        </>
+      )}
       {state === "error" && (
         <div className={styles.volumeMessage} role="alert">
           <p>The 3D surfaces could not be shown.</p>

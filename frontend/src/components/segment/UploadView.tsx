@@ -4,6 +4,7 @@ import { useId, useRef, useState, type DragEvent } from "react";
 
 import { Button } from "@/components/Button";
 import { CheckIcon, ErrorIcon } from "@/components/icons";
+import { Term } from "@/components/Term";
 import ws from "@/components/workspace/Workspace.module.css";
 import { formatBytes } from "@/lib/imageCheck";
 import { evaluate, MAX_VOLUME_MB, SEQUENCES, sequenceOf, type Sequence, type StudyFile } from "@/lib/studyFiles";
@@ -41,9 +42,42 @@ export function UploadView({ files, evaluation, sampleCase, loadingSample, runEr
         <div className={styles.column}>
           <div className={styles.intro}>
             <p className="label">Segmentation · upload</p>
-            <h1 className={ws.title}>Add the four MRI sequences</h1>
+            <h1 className={ws.title}>Outline a brain tumour in 3D</h1>
             <p className={styles.lede}>
-              FLAIR, T1, T1ce and T2 for one patient, as NIfTI files. Each file is matched to a sequence from its name;
+              The model reads four MRI scans of one patient (<Term k="sequences">FLAIR, T1, T1ce and T2</Term>) and marks
+              the tumour&apos;s <Term k="regions">three regions</Term>, with their volumes and a 3D view.
+            </p>
+          </div>
+
+          <section className={`${ws.tryPanel} ${styles.wide}`} aria-labelledby="try-segment">
+            <div className={ws.tryText}>
+              <p className="label">Try it now</p>
+              <h2 id="try-segment" className={ws.tryTitle}>
+                Run it on a sample patient
+              </h2>
+              <p className="caption">
+                A patient from the held-out <Term k="brats">BraTS</Term> test set. One click uploads the four scans and runs
+                the model, which takes seconds on a GPU.
+              </p>
+            </div>
+            <div className={ws.tryOptions}>
+              <button
+                type="button"
+                className={ws.tryOption}
+                data-primary="true"
+                disabled={loadingSample}
+                onClick={on.onSample}
+              >
+                <span>{loadingSample ? "Loading the sample patient…" : "Run the sample patient"}</span>
+                <span className="caption mono">BraTS2021_00003</span>
+              </button>
+            </div>
+          </section>
+
+          <div className={styles.own}>
+            <p className="label">Or add your own scans</p>
+            <p className="caption">
+              Four <Term k="nifti">NIfTI</Term> files, one per scan type. Each is matched to its type from the file name;
               change any match that is wrong.
             </p>
           </div>
@@ -152,7 +186,9 @@ export function UploadView({ files, evaluation, sampleCase, loadingSample, runEr
 
       <aside className={ws.aside} aria-label="Study status">
         <section>
-          <p className={`label ${ws.sectionLabel}`}>Sequences</p>
+          <p className={`label ${ws.sectionLabel}`}>
+            <Term k="sequences">Sequences</Term>
+          </p>
           {evaluation.slots.map((slot) => (
             <div key={slot.name} className={styles.slot} data-ok={Boolean(slot.file)}>
               <span className={styles.slotName}>{slot.name}</span>
@@ -183,15 +219,16 @@ export function UploadView({ files, evaluation, sampleCase, loadingSample, runEr
                 : `Still needed: ${missing.join(", ")}.`}
             </span>
           )}
-          <button type="button" className={ws.textButton} onClick={on.onSample} disabled={loadingSample}>
-            <span className="u">{loadingSample ? "Loading the sample study…" : "Use the sample study · BraTS2021_00003"}</span>
-          </button>
         </section>
 
         <section className={ws.advice}>
           <p className="label">Requirements</p>
-          <span>All four from one patient, co-registered to one grid (same shape and spacing)</span>
-          <span>Skull-stripped, background exactly 0</span>
+          <span>
+            All four from one patient, <Term k="coregistered">co-registered</Term> to one grid (same shape and spacing)
+          </span>
+          <span>
+            <Term k="skullStripped">Skull-stripped</Term>, background exactly 0
+          </span>
           <span>
             <span className="mono">1</span> mm isotropic, e.g. <span className="mono">240 × 240 × 155</span>. Other
             spacings run with a warning

@@ -52,6 +52,21 @@ label.drop {
   text-align: center;
 }
 
+section.wide {
+  max-width: none;
+}
+
+.own {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  margin-bottom: -12px;
+}
+
+.own p {
+  margin: 0;
+}
+
 .browse {
   display: flex;
   justify-content: center;
@@ -375,6 +390,18 @@ button.seqButton {
   gap: 4px 24px;
 }
 
+.groupTerm {
+  display: inline-flex;
+  align-items: center;
+  padding: 0 10px 0 6px;
+}
+
+.legendTerm {
+  display: inline-flex;
+  align-items: center;
+  min-height: 44px;
+}
+
 .legendItem {
   display: inline-flex;
   align-items: center;
@@ -557,6 +584,36 @@ button.seqButton {
   font-family: inherit;
   font-size: var(--text-14);
   cursor: pointer;
+}
+
+.volumeCue {
+  position: absolute;
+  left: 50%;
+  top: 50%;
+  transform: translate(-50%, -50%);
+  display: inline-flex;
+  align-items: center;
+  gap: 10px;
+  margin: 0;
+  padding: 12px 18px;
+  background: rgba(19, 20, 22, 0.78);
+  box-shadow: inset 0 0 0 1px var(--color-hairline-strong);
+  font-size: var(--text-14);
+  color: var(--color-text);
+  white-space: nowrap;
+  pointer-events: none;
+  transition: opacity var(--dur-crossfade) var(--ease);
+  animation: cueIn var(--dur-crossfade) var(--ease) 200ms backwards;
+}
+
+.volumeCue[data-hidden="true"] {
+  opacity: 0;
+}
+
+@keyframes cueIn {
+  from {
+    opacity: 0;
+  }
 }
 
 .volumeHint {

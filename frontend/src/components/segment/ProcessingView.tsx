@@ -5,6 +5,7 @@ import { useEffect } from "react";
 
 import { Button } from "@/components/Button";
 import { CheckIcon, ErrorIcon } from "@/components/icons";
+import { Term } from "@/components/Term";
 import ws from "@/components/workspace/Workspace.module.css";
 import type { JobStage, SegmentationResult } from "@/lib/api";
 import { formatShape } from "@/lib/studyFiles";
@@ -89,7 +90,11 @@ export function ProcessingView({ run, onComplete, onShowResults, onBack }: Props
         ? `Whole tumour ${result.regions.WT.volume_ml.toFixed(2)} mL · tumour core ${result.regions.TC.volume_ml.toFixed(2)} mL · enhancing ${result.regions.ET.volume_ml.toFixed(2)} mL`
         : uploading
           ? "Sending the four volumes; the server reads and checks them before queueing the job"
-          : "Running the five fold models and averaging their predictions";
+          : (
+            <>
+              Running the <Term k="ensemble">five fold models</Term> and averaging their predictions
+            </>
+          );
   const axial = result?.slices.axial;
 
   return (

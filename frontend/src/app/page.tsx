@@ -4,13 +4,24 @@ import { Suspense } from "react";
 import { ButtonLink } from "@/components/ButtonLink";
 import { HeroVisual } from "@/components/HeroVisual";
 import { HeroMetric, MetricRow } from "@/components/Metric";
+import { Term } from "@/components/Term";
 import { ApiError, ApiUnavailable, getResultsSummary } from "@/lib/api";
 
 import styles from "./page.module.css";
 
 const INDEX = [
-  { n: "01", href: "/segment", title: "Segment a study", body: "FLAIR, T1, T1ce and T2 in, label map and region volumes out. About 6 s on a GPU." },
-  { n: "02", href: "/classify", title: "Classify a slice", body: "One 2D image in, tumour type, probabilities and a Grad-CAM map out." },
+  {
+    n: "01",
+    href: "/segment",
+    title: "Segment a study",
+    body: "Outline a tumour in 3D. Four MRI scans of one patient in; the tumour's regions, their volumes and a 3D view out. A sample patient is included.",
+  },
+  {
+    n: "02",
+    href: "/classify",
+    title: "Classify a slice",
+    body: "Name the tumour type from one 2D MRI image: glioma, meningioma, pituitary tumour or none, with a map of where the model looked. Sample images are included.",
+  },
   { n: "03", href: "/model-card", title: "Read the model card", body: "Test results, the image-format shortcut found and mitigated, and the limitations." },
 ];
 
@@ -51,8 +62,10 @@ export default function OverviewPage() {
           </div>
           <div className={styles.stack32}>
             <p className={styles.lead}>
-              A five-model 3D U-Net ensemble outlines glioma sub-regions in multimodal MRI. A fine-tuned EfficientNetV2-S
-              names the tumour type in a single 2D slice. Both are scored on test sets held out from every training and
+              Two separate tools. <strong className={styles.leadTerm}>Segmentation</strong> takes all four MRI scans of a
+              patient and outlines the tumour in 3D, region by region, using a five-model 3D U-Net ensemble.{" "}
+              <strong className={styles.leadTerm}>Classification</strong> takes a single 2D MRI image and names the tumour
+              type, using a fine-tuned EfficientNetV2-S. Both are scored on test data held out from every training and
               selection decision.
             </p>
             <div className={styles.actions}>
@@ -61,6 +74,7 @@ export default function OverviewPage() {
                 Classify a slice
               </ButtonLink>
             </div>
+            <p className={`caption ${styles.actionsNote}`}>Both include sample data, so no files of your own are needed.</p>
           </div>
         </div>
         <HeroVisual />
@@ -142,34 +156,50 @@ async function HeadlineResults() {
   return (
     <section aria-label="Headline results" className={styles.results}>
       <div className={styles.resultColumn}>
-        <HeroMetric label="Segmentation · mean Dice" value={seg.dice.mean} decimals={3} />
+        <HeroMetric
+          label={
+            <>
+              Segmentation · mean <Term k="dice">Dice</Term>
+            </>
+          }
+          value={seg.dice.mean}
+          decimals={3}
+        />
         <div className={styles.rows}>
-          <MetricRow name="WT" value={seg.dice.WT} decimals={3} />
-          <MetricRow name="TC" value={seg.dice.TC} decimals={3} />
-          <MetricRow name="ET" value={seg.dice.ET} decimals={3} />
+          <MetricRow name={<Term k="wt">WT</Term>} value={seg.dice.WT} decimals={3} />
+          <MetricRow name={<Term k="tc">TC</Term>} value={seg.dice.TC} decimals={3} />
+          <MetricRow name={<Term k="et">ET</Term>} value={seg.dice.ET} decimals={3} />
         </div>
         <p className="caption">
-          5-fold ensemble · <span className="mono">{seg.test_patients}</span> held-out patients
+          <Term k="ensemble">5-fold ensemble</Term> · <span className="mono">{seg.test_patients}</span>{" "}
+          <Term k="heldOut">held-out patients</Term>
         </p>
       </div>
       <div className={styles.resultColumn}>
         <HeroMetric label="Classification · accuracy" value={clf.accuracy} scale={100} decimals={1} unit="%" />
         <dl className={styles.facts}>
-          <dt>95% confidence interval</dt>
+          <dt>
+            <Term k="ci">95% confidence interval</Term>
+          </dt>
           <dd className="mono">
             {(lo * 100).toFixed(1)}–{(hi * 100).toFixed(1)}
           </dd>
-          <dt>Macro F1</dt>
+          <dt>
+            <Term k="macroF1">Macro F1</Term>
+          </dt>
           <dd className="mono">{clf.macro_f1.toFixed(3)}</dd>
           {clf.accuracy_at_128px !== null && (
             <>
-              <dt>Test images shrunk to 128 px</dt>
+              <dt>
+                <Term k="stress128">Test images shrunk to 128 px</Term>
+              </dt>
               <dd className="mono">{(clf.accuracy_at_128px * 100).toFixed(1)}%</dd>
             </>
           )}
         </dl>
         <p className="caption">
-          <span className="mono">{clf.test_images.toLocaleString("en")}</span> held-out images · 4 classes
+          <span className="mono">{clf.test_images.toLocaleString("en")}</span> held-out images ·{" "}
+          <Term k="classes">4 classes</Term>
         </p>
       </div>
     </section>
