@@ -66,6 +66,7 @@ def main():
                         help="replace existing checkpoints that differ from the release (e.g. your own training runs)")
     args = parser.parse_args()
     failed = []
+    kept = 0
     for asset, (target, expected) in WEIGHTS.items():
         dest = PROJECT_ROOT / target
         if dest.exists():
@@ -74,6 +75,7 @@ def main():
                 continue
             if not args.force:
                 print(f"{target}: exists and is not the release file (kept; use --force to replace it)")
+                kept += 1
                 continue
         dest.parent.mkdir(parents=True, exist_ok=True)
         print(f"{target} <- {asset}")
@@ -84,7 +86,10 @@ def main():
             print("  SHA-256 mismatch, file removed")
     if failed:
         sys.exit(f"Download failed for: {', '.join(failed)}")
-    print("All weights in place.")
+    if kept:
+        print(f"All weights in place ({kept} kept as-is; use --force to replace with the release version).")
+    else:
+        print("All weights in place.")
 
 
 if __name__ == "__main__":
