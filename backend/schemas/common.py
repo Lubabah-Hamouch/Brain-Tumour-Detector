@@ -22,3 +22,5 @@ class HealthResponse(BaseModel):
     cuda_device: str | None = None
     classifier: ModelInfo
     segmentation: ModelInfo
+    sample_results: str = Field("off", description="Pre-computed results for the sample inputs: 'ready', "
+                                                   "'computing' (sample uploads run the models until then) or 'off'")

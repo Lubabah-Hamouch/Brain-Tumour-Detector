@@ -49,8 +49,8 @@ export function ProcessingView({ run, onComplete, onShowResults, onBack }: Props
   // First row: the upload and the server's synchronous checks (timed here); then the job's own stages.
   const rows: Row[] = [
     {
-      name: "Upload and check",
-      detail: `4 sequences${shape ? ` · ${shape}` : ""}`,
+      name: run.files ? "Upload and check" : "Request",
+      detail: run.files ? `4 sequences${shape ? ` · ${shape}` : ""}` : "pre-computed sample result",
       state: uploading ? "active" : "done",
       seconds: uploading ? elapsed : run.uploadSeconds,
     },

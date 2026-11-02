@@ -1,9 +1,15 @@
 /**
  * Typed access to the FastAPI backend (backend/). Server components call it with
- * API_URL; the browser uses NEXT_PUBLIC_API_URL. Both default to the local server.
+ * API_URL; the browser uses NEXT_PUBLIC_API_URL, which is fixed into the client bundle at build
+ * time. In development both default to the local server. A production build has no default: without
+ * an address every request fails with a message naming the missing variable, rather than quietly
+ * calling localhost (next.config.ts also stops a Vercel build that lacks it).
  */
 
-export const API_URL = process.env.API_URL ?? process.env.NEXT_PUBLIC_API_URL ?? "http://127.0.0.1:8010";
+const DEV_API_URL = "http://127.0.0.1:8010";
+const configuredUrl = process.env.API_URL || process.env.NEXT_PUBLIC_API_URL;
+
+export const API_URL = (configuredUrl || (process.env.NODE_ENV === "production" ? "" : DEV_API_URL)).replace(/\/+$/, "");
 
 export type ResultsSummary = {
   segmentation: {
@@ -61,6 +67,8 @@ export type ClassificationResult = {
   };
   model: { checkpoint: string; checkpoint_epoch: number };
   warnings: string[];
+  /** True for a sample image, answered from the result computed when the API started. */
+  precomputed?: boolean;
 };
 
 export type Sample = {
@@ -85,6 +93,11 @@ export class ApiError extends Error {
 }
 
 async function request<T>(path: string, init?: RequestInit): Promise<T> {
+  if (!API_URL) {
+    throw new ApiUnavailable(
+      "No API address is configured: set NEXT_PUBLIC_API_URL to the API's URL and rebuild the web client.",
+    );
+  }
   let response: Response;
   try {
     response = await fetch(`${API_URL}${path}`, init);
@@ -155,6 +168,8 @@ export type SegmentationResult = {
   model: { folds: number[]; cross_validation_mean_dice: Record<string, number> };
   timing_seconds: { load: number; preprocess: number; inference: number; postprocess_and_encode: number };
   warnings: string[];
+  /** True for the sample study: computed when the API started; `timing_seconds` are from that run. */
+  precomputed?: boolean;
 };
 
 export type JobStage = {
@@ -202,6 +217,14 @@ export async function getJob(statusUrl: string, signal?: AbortSignal): Promise<J
 
 export function getSampleStudy(): Promise<SampleStudy> {
   return request("/api/sample-study");
+}
+
+/**
+ * The sample study's segmentation, pre-computed on the server: no files are sent or downloaded.
+ * Fails with code `sample_result_unavailable` while it is still being computed, or where there is none.
+ */
+export function segmentSampleStudy(): Promise<JobAccepted & { case: string }> {
+  return request("/api/sample-study/segment", { method: "POST" });
 }
 
 // ---- Model card ----

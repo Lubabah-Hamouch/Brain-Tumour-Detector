@@ -44,8 +44,10 @@ class SegmentationResponse(BaseModel):
     preview: list[SliceImage]
     post_processing: dict = Field(description="ET small-component removal applied, and what it removed")
     model: dict
-    timing_seconds: dict
+    timing_seconds: dict = Field(description="Seconds per step of the run that produced this result")
     warnings: list[str] = Field(default_factory=list)
+    precomputed: bool = Field(False, description="True for the sample study: the result was computed when the server "
+                                                 "started, and timing_seconds are from that run")
 
 
 class SampleFile(BaseModel):

@@ -1,4 +1,4 @@
-# API and web client. Weights and data stay on the host and are mounted read-only.
+# API and web client. Weights and data stay on the host and are mounted (data read-only).
 #   docker compose up --build                                                  # CPU
 #   docker compose -f docker-compose.yml -f docker-compose.gpu.yml up --build   # NVIDIA GPU
 # Then open http://localhost:3000. See "Running with Docker" in README.md.
@@ -17,12 +17,16 @@ services:
       - "8010:8010"
     environment:
       BT_DEVICE: ${BT_DEVICE:-auto}
-      # The browser calls the API directly from the web client's origin.
+      # The browser calls the API directly from the web client's origin. ALLOWED_ORIGIN adds more
+      # origins (comma-separated), as on a deployment.
       BT_CORS_ORIGINS: http://localhost:3000,http://127.0.0.1:3000
+      ALLOWED_ORIGIN: ${ALLOWED_ORIGIN:-}
     volumes:
-      # Required: models/segmentation/fold1..5/best.pt and
-      # models/classification_crop_resdegrade_long/best.pt (python -m src.download_weights).
-      - ./models:/app/models:ro
+      # The weights: models/segmentation/fold1..5/best.pt and
+      # models/classification_crop_resdegrade_long/best.pt. Missing ones are downloaded on start
+      # (python -m src.download_weights), and the pre-computed sample results are saved here, so
+      # the mount is writable.
+      - ./models:/app/models
       # Optional: the sample study and sample images (data/raw/brats2021/BraTS2021_00003 and
       # data/processed/figshare_classification_4class_clean/test). Without them the "try a sample"
       # buttons report that the sample is missing; uploads still work.

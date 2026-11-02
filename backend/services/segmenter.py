@@ -145,11 +145,12 @@ class SegmenterService:
         """Synchronous convenience: prepare + run."""
         return self.run(self.prepare(files), inline_mask, base_url)
 
-    def run(self, study, inline_mask=False, base_url="", progress=None):
+    def run(self, study, inline_mask=False, base_url="", progress=None, result_id=None):
         """Preprocess, infer with every fold model, post-process. Slow: seconds on a GPU, minutes on a CPU.
 
         progress(stage, fraction, detail) is called as real work completes: stage is one of
         'preprocessing', 'inference', 'postprocessing'; fraction is the share of that stage done.
+        result_id: the key to keep the result under; a new random one by default.
         """
         report = progress or (lambda stage, fraction, detail="": None)
         image, ref, warnings = study["image"], study["ref"], study["warnings"]
@@ -205,7 +206,7 @@ class SegmenterService:
         entry = {"mask": mask_bytes, "views": views, "png": {}, "study": study["study"], "shape": shape,
                  "brain_bits": np.packbits(nonzero), "glb": None,
                  "spacing": spacing, "regions": region_results}
-        result_id = self.cache.put(entry)
+        result_id = self.cache.put(entry, result_id)
         entry["result_id"] = result_id
         t4 = time.perf_counter()
 

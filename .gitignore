@@ -59,5 +59,8 @@ reports/*
 !reports/results/
 figure*.png
 
+# Hugging Face Space bundle and the weights it is checked against (deploy/huggingface/build_space.py)
+build/
+
 # Experiment tracking (local run files)
 wandb/

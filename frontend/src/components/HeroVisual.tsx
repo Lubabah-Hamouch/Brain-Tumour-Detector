@@ -11,7 +11,8 @@ import { regionColor } from "@/design/tokens";
 import styles from "./HeroVisual.module.css";
 
 // The hero is rendered from patient data, so it is generated locally and not committed
-// (see src/visualization/render_hero.py).
+// (see src/visualization/render_hero.py). A deployment without the file (Vercel builds from git)
+// can point HERO_IMAGE_URL at a hosted copy instead; see DEPLOYMENT.md.
 const HERO_SRC = "/generated/hero-3d.png";
 const HERO_FILE = path.join(process.cwd(), "public", "generated", "hero-3d.png");
 
@@ -54,19 +55,23 @@ export function HeroVisual() {
 }
 
 /**
- * The image if it exists, else how to generate it. Checked at request time rather than baked into
- * the build, because the Docker image gets the render as a volume mounted at run time.
+ * The image if it exists (or HERO_IMAGE_URL is set), else how to generate it. Checked at request
+ * time rather than baked into the build, because the Docker image gets the render as a volume
+ * mounted at run time.
  */
 async function HeroImage() {
   await connection();
-  return existsSync(HERO_FILE) ? (
+  const src = existsSync(HERO_FILE) ? HERO_SRC : process.env.HERO_IMAGE_URL;
+  return src ? (
     <Link href="/segment?demo=3d" className={styles.link} aria-label="View this patient in 3D: run the segmentation and open the interactive 3D view">
       <Image
-        src={HERO_SRC}
+        src={src}
         alt="3D render of held-out test patient BraTS2021_00003: a translucent brain surface with the ensemble's predicted tumour regions inside it in shades of red"
         width={996}
         height={1200}
         priority
+        // A hosted copy is served as is, so it needs no images.remotePatterns entry.
+        unoptimized={src !== HERO_SRC}
         className={styles.image}
       />
       <div aria-hidden="true" className={styles.sweep} />

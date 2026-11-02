@@ -42,6 +42,8 @@ class ClassificationResponse(BaseModel):
     gradcam: GradCam
     model: dict = Field(description="Checkpoint and its validation metrics")
     warnings: list[str] = Field(default_factory=list)
+    precomputed: bool = Field(False, description="True for a sample image: the result was computed when the server "
+                                                 "started")
 
 
 class Sample(BaseModel):

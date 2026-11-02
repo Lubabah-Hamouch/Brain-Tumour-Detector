@@ -12,7 +12,9 @@ FastAPI service for the two trained models:
   (**`GET /api/segment/{result_id}/slices/{plane}/{layer}.png`**), 3D surfaces
   (**`GET /api/segment/{result_id}/mesh.glb`**), the label map download and a PNG report
   (**`GET /api/segment/{result_id}/report.png`**).
-- **`GET /api/sample-study`**: a held-out BraTS test study for trying the segmentation without data.
+- **`POST /api/sample-study/segment`**: the pre-computed segmentation of a held-out BraTS test
+  study, for trying the segmentation without data. **`GET /api/sample-study`** serves that study's
+  files, except on the public deployment.
 - **`GET /api/results/summary`**: the headline held-out test results, read from
   `reports/results/`, for the frontend's Overview.
 
@@ -39,16 +41,25 @@ uvicorn backend.main:app --port 8010
 - **Weights:** `python -m src.download_weights` puts the published checkpoints where the defaults
   below expect them, or train your own (root README).
 
-**Docker:** `backend/Dockerfile` builds this service from the repository root. The `TORCH_VARIANT`
-build argument selects the PyTorch build: `cpu` (default) or a CUDA build such as `cu118`. The
-image holds the code, `reports/results/`, `reports/final_results.md` and `data/manifests/`, so the
-results and model card endpoints work. Weights and data are mounted at `/app/models` and
-`/app/data`. `docker-compose.yml` at the root wires this up with the web client; see "Running with
-Docker" in the root README.
+**Docker:** `backend/Dockerfile` builds this service from the repository root.
+
+- **PyTorch build:** the `TORCH_VARIANT` build argument selects `cpu` (default) or a CUDA build
+  such as `cu118`. The CPU image needs no GPU or CUDA libraries.
+- **Contents:** the image holds the code, `reports/results/`, `reports/final_results.md` and
+  `data/manifests/`, so the results and model card endpoints work.
+- **Weights:** on start, the container runs `python -m src.download_weights`, which downloads any
+  missing release weights into `/app/models`. A container with nothing mounted therefore works on
+  its own. Mount `models/` there to keep them between containers. With your own checkpoints
+  mounted, the download keeps them.
+- **Data:** mount it at `/app/data` for the sample buttons.
+- **Compose:** `docker-compose.yml` at the root wires this up with the web client; see "Running
+  with Docker" in the root README.
+- **Hugging Face Space:** the same Dockerfile runs as a Docker Space; see `DEPLOYMENT.md`.
 
 ```bash
 docker build -f backend/Dockerfile -t brain-tumour-api .
-docker run --rm -p 8010:8010 -v "$PWD/models:/app/models:ro" -v "$PWD/data:/app/data:ro" brain-tumour-api
+docker run --rm -p 8010:8010 brain-tumour-api                                # downloads the weights
+docker run --rm -p 8010:8010 -v "$PWD/models:/app/models" -v "$PWD/data:/app/data:ro" brain-tumour-api
 ```
 
 Settings come from environment variables:
@@ -61,11 +72,34 @@ Settings come from environment variables:
 | `BT_SEGMENTATION_FOLDS` | `1,2,3,4,5` | folds in the ensemble |
 | `BT_ET_MIN_VOXELS` | tuned value (50) | enhancing-tumour component size threshold |
 | `BT_CORS_ORIGINS` | `localhost` / `127.0.0.1` on ports 3000 and 5173 | allowed frontend origins, comma-separated |
+| `ALLOWED_ORIGIN` | none | further allowed origins, comma-separated, added to `BT_CORS_ORIGINS`: the deployed web client, e.g. `https://your-app.vercel.app` |
 | `BT_MAX_IMAGE_MB` / `BT_MAX_VOLUME_MB` | 20 / 200 | upload limits |
 | `BT_RESULT_CACHE_SIZE` | 16 | recent results kept for download: segmentation masks, viewer slices and 3D surfaces, classification reports, finished jobs |
+| `BT_SAMPLE_RESULTS` | `models/sample_results.npz` | where the pre-computed sample results are saved and loaded; `off` disables them |
+| `BT_SAMPLE_RESULTS_REQUIRED` | `0` | `1`: refuse to start unless that file holds results for the served models (the Hugging Face Space, which cannot recompute them) |
+| `BT_SAMPLE_STUDY_FILES` | `1` | `0`: no `GET /api/sample-study` endpoints, so the sample study's raw NIfTI files are never served (the Hugging Face Space) |
+| `BT_DOWNLOAD_WEIGHTS` | `1` | Docker only: `0` skips downloading missing weights on start |
 
 The default `BT_ET_MIN_VOXELS` is read from `reports/results/segmentation_test.json`, where it was
 tuned on validation data.
+
+**Pre-computed sample results** (`backend/services/samples.py`): the sample study and the five
+sample images are known in advance, so their results are computed once, not on every click.
+
+- **Computing them:** on start, the API loads them from `BT_SAMPLE_RESULTS`. If the file is
+  missing, it computes them as one background job and saves them. The file is only used when the
+  served checkpoints, the ET threshold and the sample files match the ones it was computed with;
+  otherwise it is computed again.
+- **Matching an upload:** an upload is answered from them only if it is byte for byte a sample:
+  same field, file name, size and SHA-256. The web client uploads the samples unchanged, so its
+  sample buttons always match.
+- **The response:** the classification response, or the segmentation job, is complete at once,
+  with `precomputed: true`. Every download URL in it (report, slices, mesh, label map) is served
+  from the same stored result. These stored results are never evicted.
+- **Other uploads** run the models exactly as before. Their only extra step is a set lookup of
+  name and size.
+
+`GET /api/health` reports `sample_results`: `ready`, `computing` or `off`.
 
 **CPU mode** (`BT_DEVICE=cpu`), measured on a 16-core laptop CPU:
 
@@ -172,7 +206,8 @@ curl http://localhost:8010/api/jobs/9b1e...
 ```
 
 **Asynchronous:** segmentation takes seconds on a GPU and minutes on a CPU, which is too long to
-hold an HTTP request open. The request is handled in two steps:
+hold an HTTP request open. The request is handled in two steps (the sample study is the exception:
+its job is `complete` in the `202` response, from the pre-computed result):
 
 1. **Validation, synchronous.** The four volumes are read and checked (file types, sizes, NIfTI
    headers, matching grids) before the response. Any problem is returned immediately as a normal
@@ -367,12 +402,29 @@ Query parameters choose what the viewer shows: `plane` (`axial`, `coronal` or `s
 `enhancing`) and `opacity` (0-100). The image is 2400 × 3000. It is rendered on the server with
 the same fonts and colours as the classification report.
 
-## `GET /api/sample-study`
+## `POST /api/sample-study/segment`
 
 The held-out test patient `BraTS2021_00003`, so the segmentation can be tried without data of
-one's own. It lists the four sequences with their size and a `url`. `GET /api/sample-study/{name}`
-returns one of those four files, read from the local BraTS data (`data/raw/`). Nothing else is
-served, the case's ground-truth segmentation included; other names answer `404 sample_not_found`.
+one's own. This is what the web client's "Run the sample patient" button calls.
+
+- **Response:** `202` with a job that is already `complete`, as for `POST /api/segment`, plus the
+  `case`. The job's result is the pre-computed segmentation (`precomputed: true`).
+- **No files:** nothing is uploaded, and the study's volumes are not sent.
+- **Not available:** `503 sample_result_unavailable` while the result is still being computed,
+  `404` where there is none.
+
+## `GET /api/sample-study`
+
+The same study's four sequences, for local use: it lists them with their size and a `url`.
+`GET /api/sample-study/{name}` returns one of those four files, read from the local BraTS data
+(`data/raw/`).
+
+- Nothing else is served, the case's ground-truth segmentation included; other names answer
+  `404 sample_not_found`.
+- The web client falls back to these files only while a local API is still computing the
+  pre-computed result.
+- With `BT_SAMPLE_STUDY_FILES=0` (the public deployment) neither endpoint exists: the BraTS terms
+  do not allow redistributing the raw volumes.
 
 ## `GET /api/results/summary`
 

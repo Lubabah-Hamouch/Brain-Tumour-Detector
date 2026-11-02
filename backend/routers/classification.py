@@ -52,8 +52,12 @@ async def classify(request: Request, file: UploadFile = File(..., description="J
         raise ApiError(422, "empty_file", f"'{name}' is empty.")
     if len(data) > limit * 2**20:
         raise ApiError(413, "file_too_large", f"'{name}' is {len(data) / 2**20:.1f} MB; the limit is {limit:.0f} MB.")
-    img = service.open_image(data)
     base_url = str(request.base_url).rstrip("/")
+    samples = request.app.state.samples
+    precomputed = samples.classification(name, data, base_url) if samples else None
+    if precomputed:
+        return precomputed
+    img = service.open_image(data)
     return await run_in_threadpool(service.predict, img, name, base_url)
 
 
@@ -79,7 +83,8 @@ async def download_report(request: Request, result_id: str):
                     headers={"Content-Disposition": f'attachment; filename="classification_{result_id[:8]}.png"'})
 
 
-def _sample_paths():
+def sample_paths():
+    """{name: path} of the sample images present in the local cleaned test set."""
     paths = {}
     for name in SAMPLES:
         found = sorted((CLEAN_DIR / "test").glob(f"*/{name}"))
@@ -105,13 +110,13 @@ def list_samples(request: Request):
     return [Sample(name=name, true_class=path.parent.name, size_bytes=path.stat().st_size,
                    known_error=name in errors, recorded_prediction=errors.get(name),
                    url=f"{base_url}/api/samples/{name}")
-            for name, path in _sample_paths().items()]
+            for name, path in sample_paths().items()]
 
 
 @router.get("/samples/{name}", response_class=FileResponse, responses={404: {"model": ErrorResponse}},
             summary="One sample image (only the listed samples are served)")
 def get_sample(name: str):
-    path = _sample_paths().get(name)
+    path = sample_paths().get(name)
     if path is None:
         raise ApiError(404, "sample_not_found", f"'{name}' is not one of the sample images {list(SAMPLES)}.")
     return FileResponse(path, media_type="image/jpeg", filename=name, content_disposition_type="inline")

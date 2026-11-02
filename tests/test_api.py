@@ -12,6 +12,7 @@ import io
 import json
 import random
 import time
+from dataclasses import replace
 
 import nibabel as nib
 import numpy as np
@@ -34,13 +35,36 @@ pytestmark = pytest.mark.skipif(
     reason="needs trained checkpoints and local datasets")
 
 
-@pytest.fixture(scope="module")
-def client():
+def make_client(sample_results, **settings):
     from fastapi.testclient import TestClient
 
+    from backend.config import Settings
     from backend.main import create_app
 
-    with TestClient(create_app()) as c:
+    return TestClient(create_app(replace(Settings.from_env(), sample_results=sample_results, **settings)))
+
+
+@pytest.fixture(scope="module")
+def client():
+    # Without pre-computed samples: the sample study is also the test case below, and every
+    # request here has to run the models.
+    with make_client(None) as c:
+        yield c
+
+
+@pytest.fixture(scope="module")
+def sample_results_file(tmp_path_factory):
+    return tmp_path_factory.mktemp("samples") / "sample_results.npz"
+
+
+@pytest.fixture(scope="module")
+def sample_client(sample_results_file):
+    """An API that pre-computes the sample results on start (in the background), once they are ready."""
+    with make_client(sample_results_file) as c:
+        deadline = time.time() + 900
+        while c.get("/api/health").json()["sample_results"] != "ready":
+            assert time.time() < deadline, "sample results not ready in 900 s"
+            time.sleep(0.5)
         yield c
 
 
@@ -450,3 +474,97 @@ def test_segment_mesh_glb(client, segmented):
     assert ((extent > 100) & (extent < 200)).all() and np.allclose(np.array(brain["max"]) + np.array(brain["min"]), 0, atol=5)
     assert client.get(url).content == glb  # served from the cache the second time
     assert client.get("/api/segment/does-not-exist/mesh.glb").status_code == 404
+
+
+def test_sample_images_are_precomputed_and_match_inference(client, sample_client):
+    samples = sample_client.get("/api/samples").json()
+    for s in samples:
+        path = CLEAN_DIR / "test" / s["true_class"] / s["name"]
+        pre, real = upload_image(sample_client, path).json(), upload_image(client, path).json()
+        assert pre["precomputed"] and not real["precomputed"]
+        assert pre["predicted_class"] == real["predicted_class"], s["name"]
+        assert pre["probabilities"] == pytest.approx(real["probabilities"], abs=1e-4)
+        assert pre["model_input_png"] == real["model_input_png"]
+        report = sample_client.get(pre["report_url"].replace("http://testserver", ""))
+        assert report.status_code == 200 and report.headers["content-type"] == "image/png"
+    # Only the exact file is answered from the stored result: one extra byte runs the model.
+    path = CLEAN_DIR / "test" / samples[0]["true_class"] / samples[0]["name"]
+    r = sample_client.post("/api/classify", files={"file": (path.name, path.read_bytes() + b"\0", "image/jpeg")})
+    assert r.status_code == 200 and not r.json()["precomputed"]
+
+
+def test_sample_study_is_precomputed_and_matches_inference(client, sample_client, segmented):
+    case, real, _, _ = segmented
+    r = sample_client.post("/api/segment?inline_mask=true", files=brats_files(case))
+    assert r.status_code == 202 and r.json()["status"] == "complete"
+    job = sample_client.get(r.json()["status_url"].replace("http://testserver", "")).json()
+    assert job["status"] == "complete" and job["progress"] == 1.0 and job["queue_position"] is None
+    assert [(s["name"], s["status"]) for s in job["stages"]] == [
+        ("preprocessing", "complete"), ("inference", "complete"), ("postprocessing", "complete")]
+    pre = job["result"]
+    assert pre["precomputed"] and not real["precomputed"] and pre["study"] == real["study"] == case
+    for region in ("WT", "TC", "ET"):
+        assert pre["regions"][region]["voxels"] == pytest.approx(real["regions"][region]["voxels"], rel=1e-3)
+    pre_labels, real_labels = (np.asarray(nib.Nifti1Image.from_bytes(gzip.decompress(base64.b64decode(b["mask_nifti_base64"]))).dataobj)
+                               for b in (pre, real))
+    assert (pre_labels != real_labels).mean() < 1e-4
+    # Every download the result screen uses is served from the pinned result.
+    get = lambda url: sample_client.get(url.replace("http://testserver", ""))  # noqa: E731
+    assert get(pre["mask_url"]).status_code == 200
+    assert get(pre["mesh_url"]).status_code == 200
+    assert get(pre["report_url"]).status_code == 200
+    for plane in pre["slices"].values():
+        assert all(get(url).status_code == 200 for url in plane["layers"].values())
+    # A study that differs from the sample (here: one sequence swapped for another) runs the models.
+    files = brats_files(case)
+    files["t2"] = (files["t2"][0], files["t1"][1], files["t2"][2])
+    r = sample_client.post("/api/segment", files=files)
+    assert r.status_code == 202 and r.json()["status"] == "queued"
+
+
+def test_sample_study_result_without_files(sample_client, segmented):
+    """What the sample button calls: the pre-computed result, no upload."""
+    _, real, _, _ = segmented
+    r = sample_client.post("/api/sample-study/segment")
+    assert r.status_code == 202 and r.json()["status"] == "complete" and r.json()["case"] == "BraTS2021_00003"
+    job = sample_client.get(r.json()["status_url"].replace("http://testserver", "")).json()
+    pre = job["result"]
+    assert job["status"] == "complete" and pre["precomputed"] and pre["mask_nifti_base64"] is None
+    assert pre["regions"]["WT"]["voxels"] == pytest.approx(real["regions"]["WT"]["voxels"], rel=1e-3)
+    assert sample_client.get(pre["mesh_url"].replace("http://testserver", "")).status_code == 200
+
+
+def test_sample_study_result_unavailable_without_samples(client):
+    r = client.post("/api/sample-study/segment")
+    assert r.status_code == 404 and r.json()["error"]["code"] == "sample_result_unavailable"
+
+
+def test_saved_sample_results_load_on_restart(sample_client, sample_results_file):
+    assert sample_results_file.exists()
+    with make_client(sample_results_file) as c:
+        assert c.get("/api/health").json()["sample_results"] == "ready"
+
+
+def test_public_deployment_serves_no_sample_study_files(sample_client, sample_results_file):
+    """The Space's settings: no route to the raw volumes, the result still served."""
+    with make_client(sample_results_file, sample_study_files=False, sample_results_required=True) as c:
+        paths = c.get("/openapi.json").json()["paths"]
+        assert "/api/sample-study" not in paths and "/api/sample-study/{name}" not in paths
+        assert "/api/sample-study/segment" in paths
+        assert c.get("/api/sample-study").status_code in (404, 405)
+        for m in MODALITIES:
+            assert c.get(f"/api/sample-study/BraTS2021_00003_{m}.nii.gz").status_code in (404, 405)
+        assert c.post("/api/sample-study/segment").json()["status"] == "complete"
+
+
+@pytest.mark.parametrize("problem", ["missing", "stale"])
+def test_required_sample_results_stop_start_up(tmp_path, sample_results_file, problem):
+    path = tmp_path / "sample_results.npz"
+    if problem == "stale":  # a file for other settings
+        path.write_bytes(sample_results_file.read_bytes())
+    settings = {"sample_results_required": True}
+    if problem == "stale":
+        settings["et_min_voxels"] = 7
+    with pytest.raises(RuntimeError, match="BT_SAMPLE_RESULTS_REQUIRED"):
+        with make_client(path, **settings):
+            pass

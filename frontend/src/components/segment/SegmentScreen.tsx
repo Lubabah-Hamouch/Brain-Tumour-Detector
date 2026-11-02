@@ -7,6 +7,7 @@ import {
   ApiError,
   ApiUnavailable,
   getSampleStudy,
+  segmentSampleStudy,
   startSegmentation,
   type SegmentationResult,
   type SequenceField,
@@ -26,8 +27,13 @@ let nextId = 0;
  * The run's timing starts when the visitor presses Run: the upload and the server's checks are
  * measured here, the job's stages come from the job API.
  *
- * With ?demo=3d (the Overview's "View in 3D" link) the sample study is loaded and run straight
- * away, through the same upload and job as any study, and the result opens in the 3D view.
+ * "Run the sample patient" asks the server for the sample study's pre-computed result: no files
+ * are downloaded or uploaded (the public deployment does not serve the raw BraTS volumes), and the
+ * result opens directly. Only where the server has no result yet (a local API still computing it)
+ * does it fall back to loading the sample's files and running them like an upload.
+ *
+ * With ?demo=3d (the Overview's "View in 3D" link) the sample runs straight away and the result
+ * opens in the 3D view.
  */
 export function SegmentScreen() {
   const demo = useSearchParams().get("demo") === "3d";
@@ -47,6 +53,9 @@ export function SegmentScreen() {
     if (showResults) window.scrollTo({ top: 0 });
   }, [showResults]);
   const runCounter = useRef(0);
+  // Set while the current run is the sample's pre-computed result, which opens without a stop on
+  // the processing screen.
+  const openDirectly = useRef(false);
 
   const evaluation = useMemo(() => evaluate(files), [files]);
 
@@ -100,6 +109,7 @@ export function SegmentScreen() {
     setRunError(null);
     setResult(null);
     setShowResults(false);
+    openDirectly.current = false;
     setRun({ id, startedAt, header, files: byField, sample: sampleCase, statusUrl: null, uploadSeconds: null, preview: null });
 
     // The dimmed preview is read from the local FLAIR file while the upload runs.
@@ -122,37 +132,69 @@ export function SegmentScreen() {
     }
   }, [evaluation, sampleCase]);
 
-  // Demo: load the sample once, then run it as soon as all four files pass their checks.
+  // Fallback for a sample without a pre-computed result: run it once its files pass their checks.
   useEffect(() => {
-    if (demo && demoStep.current === "idle") {
-      demoStep.current = "loading";
-      void loadSample();
-    }
-  }, [demo, loadSample]);
-  useEffect(() => {
-    if (demo && demoStep.current === "loading" && evaluation.ready && !run) {
-      demoStep.current = "started";
-      void start();
-    } else if (runWhenReady.current && sampleCase && evaluation.ready && !run) {
+    if (runWhenReady.current && sampleCase && evaluation.ready && !run) {
       runWhenReady.current = false;
       void start();
     }
-  }, [demo, evaluation.ready, run, start, sampleCase]);
+  }, [evaluation.ready, run, start, sampleCase]);
 
-  const runSample = useCallback(() => {
-    runWhenReady.current = true;
-    void loadSample();
+  const runSample = useCallback(async () => {
+    setLoadingSample(true);
+    setRunError(null);
+    const startedAt = performance.now();
+    try {
+      const accepted = await segmentSampleStudy();
+      const id = ++runCounter.current;
+      openDirectly.current = true;
+      setResult(null);
+      setShowResults(false);
+      setRun({
+        id,
+        startedAt,
+        header: null,
+        files: null,
+        sample: accepted.case,
+        statusUrl: accepted.status_url,
+        uploadSeconds: (performance.now() - startedAt) / 1000,
+        preview: null,
+      });
+    } catch (error) {
+      if (error instanceof ApiError && error.code === "sample_result_unavailable") {
+        // No pre-computed result on this server yet: load the files and run them as an upload.
+        runWhenReady.current = true;
+        await loadSample();
+      } else {
+        setRunError(
+          error instanceof ApiError || error instanceof ApiUnavailable
+            ? error.message
+            : `The sample could not be run: ${(error as Error).message}`,
+        );
+      }
+    } finally {
+      setLoadingSample(false);
+    }
   }, [loadSample]);
+
+  // Demo: run the sample once.
+  useEffect(() => {
+    if (demo && demoStep.current === "idle") {
+      demoStep.current = "started";
+      void runSample();
+    }
+  }, [demo, runSample]);
 
   const complete = useCallback(
     (r: SegmentationResult) => {
       setResult(r);
-      if (demo) setShowResults(true);
+      if (demo || openDirectly.current) setShowResults(true);
     },
     [demo],
   );
 
   const backToFiles = useCallback(() => {
+    openDirectly.current = false;
     setRun(null);
     setResult(null);
     setShowResults(false);

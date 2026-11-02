@@ -8,6 +8,7 @@ requirements are installed.
 Usage:
     python -m src.download_weights            # keeps any checkpoint you trained yourself
     python -m src.download_weights --force    # replaces them with the release files
+    python -m src.download_weights --root DIR # into DIR/models/... instead of this project's models/
 
 The weights were trained on BraTS 2021 and the Brain Tumor MRI Dataset and are shared for
 research use under those datasets' terms (see "Data and terms of use" in the README).
@@ -64,11 +65,13 @@ def main():
     parser = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
     parser.add_argument("--force", action="store_true",
                         help="replace existing checkpoints that differ from the release (e.g. your own training runs)")
+    parser.add_argument("--root", type=Path, default=PROJECT_ROOT,
+                        help="folder to download into, as DIR/models/...; default this project")
     args = parser.parse_args()
     failed = []
     kept = 0
     for asset, (target, expected) in WEIGHTS.items():
-        dest = PROJECT_ROOT / target
+        dest = args.root / target
         if dest.exists():
             if sha256(dest) == expected:
                 print(f"{target}: already present")

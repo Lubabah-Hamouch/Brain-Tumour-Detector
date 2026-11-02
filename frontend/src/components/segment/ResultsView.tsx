@@ -68,7 +68,8 @@ export function ResultsView({ result, run, onNewStudy, initialView = "axial" }: 
   const visible = LABELS.filter((l) => shown[l.key]);
   const t = result.timing_seconds;
   const upload = run.uploadSeconds ?? t.load;
-  const total = upload + t.preprocess + t.inference + t.postprocess_and_encode;
+  // A pre-computed sample only took the upload here; its stage timings are from the run at start-up.
+  const total = result.precomputed ? upload : upload + t.preprocess + t.inference + t.postprocess_and_encode;
   const spacing = result.spacing_mm.every((s) => Math.abs(s - result.spacing_mm[0]) < 1e-3)
     ? `${result.spacing_mm[0].toFixed(1)} mm`
     : `${result.spacing_mm.map((s) => s.toFixed(2)).join(" × ")} mm`;
@@ -90,7 +91,8 @@ export function ResultsView({ result, run, onNewStudy, initialView = "axial" }: 
     <div className={ws.screen}>
       <main className={`${ws.main} ${ws.resultMain}`}>
         <p className={`mono caption ${ws.context}`}>
-          {result.study} · {result.shape.join(" × ")} · {spacing.replace(" mm", "\u00a0mm")} · {total.toFixed(1)}{"\u00a0"}s
+          {result.study} · {result.shape.join(" × ")} · {spacing.replace(" mm", "\u00a0mm")} ·{" "}
+          {result.precomputed ? "pre-computed" : `${total.toFixed(1)}\u00a0s`}
         </p>
         <div className={`label ${ws.viewerHead}`}>
           {view3d ? (
@@ -325,7 +327,16 @@ export function ResultsView({ result, run, onNewStudy, initialView = "axial" }: 
               Timing · <span className="mono">{total.toFixed(2)} s</span>
             </summary>
             <p className={`mono caption ${ws.modelLines}`}>
-              upload and check {upload.toFixed(2)} · preprocess {t.preprocess.toFixed(2)}
+              {run.files ? "upload and check" : "request"} {upload.toFixed(2)}
+              {result.precomputed ? (
+                <>
+                  <br />
+                  pre-computed at start-up:{" "}
+                </>
+              ) : (
+                " · "
+              )}
+              preprocess {t.preprocess.toFixed(2)}
               <br />
               inference, {result.model.folds.length} models {t.inference.toFixed(2)} · encode{" "}
               {t.postprocess_and_encode.toFixed(2)}

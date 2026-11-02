@@ -5,13 +5,16 @@ from fastapi.concurrency import run_in_threadpool
 from fastapi.responses import FileResponse, Response
 
 from backend.schemas.common import ErrorResponse
-from backend.schemas.jobs import JobAccepted, JobStatus
+from backend.schemas.jobs import JobAccepted, JobStatus, SampleStudyAccepted
 from backend.schemas.segmentation import SampleStudy
 from backend.services import slices
 from backend.services.errors import ApiError
 from src.config import BRATS_DIR
 
 router = APIRouter(prefix="/api", tags=["segmentation"])
+# The sample study's raw NIfTI files. Included only with BT_SAMPLE_STUDY_FILES (backend/main.py):
+# fine locally, but the public deployment must not redistribute BraTS volumes.
+sample_files_router = APIRouter(prefix="/api", tags=["segmentation"])
 
 ERRORS = {404: {"model": ErrorResponse}, 413: {"model": ErrorResponse}, 415: {"model": ErrorResponse},
           422: {"model": ErrorResponse}, 503: {"model": ErrorResponse}}
@@ -39,6 +42,11 @@ does not wait for it. The upload is read and validated first (bad files fail her
 a background job is queued and the response is `202 Accepted` with a `job_id`. Poll
 `GET /api/jobs/{job_id}` for the current stage and progress; the job's `result` holds the
 segmentation once `status` is `complete`.
+
+**Sample study:** `POST /api/sample-study/segment` returns its result without an upload. Where the
+sample study's files are served (`GET /api/sample-study`, not on the public deployment), uploading
+them unchanged here is also answered from that result: the job is `complete` at once and its result
+has `precomputed: true`.
 
 **Output (in the job result):** region volumes and statistics, viewer slices (one per plane: four
 sequences and three label layers, each a PNG URL), three preview slices, and a label
@@ -79,13 +87,20 @@ async def segment(
     for modality, upload in (("flair", flair), ("t1", t1), ("t1ce", t1ce), ("t2", t2)):
         files[modality] = (upload.filename or f"{modality} (no filename)", await upload.read())
     base_url = str(request.base_url).rstrip("/")
-    # Reading and validating the volumes takes well under a second; errors are returned right away.
-    study = await run_in_threadpool(service.prepare, files)
-    job_id = request.app.state.jobs.submit(
-        "segmentation", STAGES, lambda progress: service.run(study, inline_mask, base_url, progress))
+    samples = request.app.state.samples
+    precomputed = samples.segmentation(files, base_url, inline_mask) if samples else None
+    if precomputed:
+        job_id = request.app.state.jobs.add_complete("segmentation", STAGES, precomputed)
+        status = "complete"
+    else:
+        # Reading and validating the volumes takes well under a second; errors are returned right away.
+        study = await run_in_threadpool(service.prepare, files)
+        job_id = request.app.state.jobs.submit(
+            "segmentation", STAGES, lambda progress: service.run(study, inline_mask, base_url, progress))
+        status = "queued"
     status_url = f"{base_url}/api/jobs/{job_id}"
     response.headers["Location"] = status_url
-    return {"job_id": job_id, "status": "queued", "status_url": status_url}
+    return {"job_id": job_id, "status": status, "status_url": status_url}
 
 
 @router.get("/segment/{result_id}/mask.nii.gz", responses={404: {"model": ErrorResponse}},
@@ -159,14 +174,40 @@ async def mesh(request: Request, result_id: str):
     return Response(glb, media_type="model/gltf-binary", headers={"Cache-Control": "private, max-age=3600"})
 
 
-def _sample_files():
+def sample_files():
+    """{modality: path} of the sample study's four files in the local BraTS data (they may not exist)."""
     return {m: BRATS_DIR / SAMPLE_CASE / f"{SAMPLE_CASE}_{m}.nii.gz" for m in slices.SEQUENCES}
 
 
-@router.get("/sample-study", response_model=SampleStudy, responses={404: {"model": ErrorResponse}},
+@router.post("/sample-study/segment", response_model=SampleStudyAccepted, status_code=202,
+             responses={404: {"model": ErrorResponse}, 503: {"model": ErrorResponse}},
+             summary="Segmentation of the held-out sample study, pre-computed: no files are sent or served",
+             description="Returns a job that is already `complete`; its result is the sample study's segmentation "
+                         "(viewer slices, 3D surfaces, label map, volumes), computed when the server started. "
+                         "`503 sample_result_unavailable` while it is still being computed; `404` where there is "
+                         "none.")
+def segment_sample_study(request: Request, response: Response,
+                         inline_mask: bool = Query(False, description="Also return the .nii.gz label map inline")):
+    samples = request.app.state.samples
+    if samples is None:
+        raise ApiError(404, "sample_result_unavailable", "This server has no pre-computed sample study.")
+    base_url = str(request.base_url).rstrip("/")
+    result = samples.study_result(base_url, inline_mask)
+    if result is None:
+        if samples.ready:
+            raise ApiError(404, "sample_result_unavailable", "This server has no pre-computed sample study.")
+        raise ApiError(503, "sample_result_unavailable",
+                       "The sample study's result is still being computed; try again in a few minutes.")
+    job_id = request.app.state.jobs.add_complete("segmentation", STAGES, result)
+    status_url = f"{base_url}/api/jobs/{job_id}"
+    response.headers["Location"] = status_url
+    return {"job_id": job_id, "status": "complete", "status_url": status_url, "case": result["study"]}
+
+
+@sample_files_router.get("/sample-study", response_model=SampleStudy, responses={404: {"model": ErrorResponse}},
             summary="A held-out test study (four NIfTI files) to try the segmentation on")
 def sample_study(request: Request):
-    files = _sample_files()
+    files = sample_files()
     if not all(p.exists() for p in files.values()):
         raise ApiError(404, "sample_not_found", f"The sample study {SAMPLE_CASE} is not in the local BraTS data.")
     base_url = str(request.base_url).rstrip("/")
@@ -175,10 +216,10 @@ def sample_study(request: Request):
                        "url": f"{base_url}/api/sample-study/{p.name}"} for m, p in files.items()]}
 
 
-@router.get("/sample-study/{name}", response_class=FileResponse, responses={404: {"model": ErrorResponse}},
+@sample_files_router.get("/sample-study/{name}", response_class=FileResponse, responses={404: {"model": ErrorResponse}},
             summary="One file of the sample study (only its four sequences are served)")
 def sample_study_file(name: str):
-    path = next((p for p in _sample_files().values() if p.name == name and p.exists()), None)
+    path = next((p for p in sample_files().values() if p.name == name and p.exists()), None)
     if path is None:
         raise ApiError(404, "sample_not_found", f"'{name}' is not a file of the sample study {SAMPLE_CASE}.")
     return FileResponse(path, media_type="application/gzip", filename=name)

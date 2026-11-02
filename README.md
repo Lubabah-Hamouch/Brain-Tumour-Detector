@@ -178,9 +178,12 @@ Next.js web client ──HTTP──▶ FastAPI service
 
 There are two ways to run the app:
 
-- **With Docker** ([below](#running-with-docker)): the quickest. You need Docker and the trained
-  weights, which one command downloads.
+- **With Docker** ([below](#running-with-docker)): the quickest. You need Docker; the API
+  downloads the trained weights on its first start.
 - **From source** (this section): needed to retrain the models or rerun the evaluation.
+
+To put it online on free tiers (the API on a Hugging Face Space, the web client on Vercel), see
+[Deployment](#deployment).
 
 Either way, the app needs the trained weights. Download the published ones with
 
@@ -281,14 +284,12 @@ The integration tests need the trained checkpoints and the local data, and are s
 
 `docker-compose.yml` runs the API and the web client as two containers. The images contain the
 code, the evaluation results and the split manifests only. Weights and data are never copied into
-them; they stay on your machine and are mounted read-only.
+them; they stay on your machine and are mounted (the data read-only).
 
-**1. Get the weights** into `models/`, either the published ones or your own (see
-[above](#running-it-locally)):
-
-```powershell
-python -m src.download_weights
-```
+**1. Weights.** On start, the API container runs `python -m src.download_weights`, which
+downloads any of the published weights missing from `models/` (about 410 MB, once) and keeps
+checkpoints you trained yourself. To use only your own and skip the download, set
+`BT_DOWNLOAD_WEIGHTS: "0"` under `api.environment`.
 
 **2. Start the app** and open http://localhost:3000. The API is at http://localhost:8010/docs.
 
@@ -305,7 +306,12 @@ docker compose -f docker-compose.yml -f docker-compose.gpu.yml up --build    # N
   (Docker Desktop on Windows includes GPU support through WSL 2). Segmentation takes seconds.
 - **Start-up:** the web client waits until the API reports healthy. Loading PyTorch and the six
   models took between 20 seconds and 2.5 minutes in testing; the first start after building, and
-  the GPU image, are the slow cases.
+  the GPU image, are the slow cases. The first start also downloads the weights.
+- **Sample results:** on the first start with the sample data mounted, the API runs the sample
+  study and the five sample images through the models in the background (a few minutes on the CPU)
+  and saves the results to `models/sample_results.npz`. From then on, the "try a sample" buttons
+  answer at once, and later starts load the file. Other uploads always run the models. An upload
+  sent during that first computation waits for it in the job queue.
 - **Port 3000** must be free. Stop a running `npm run dev` first, or change the web client's
   port mapping and add the new origin to `BT_CORS_ORIGINS`.
 
@@ -313,7 +319,7 @@ docker compose -f docker-compose.yml -f docker-compose.gpu.yml up --build    # N
 
 | Host folder | In the container | Needed for |
 |---|---|---|
-| `models/` | `/app/models` | **Required.** `segmentation/fold1`…`fold5/best.pt` and `classification_crop_resdegrade_long/best.pt`. The API does not start without them. |
+| `models/` | `/app/models` | **Required, writable.** `segmentation/fold1`…`fold5/best.pt` and `classification_crop_resdegrade_long/best.pt`, downloaded on start if missing, and the saved sample results. On a Linux host the folder must be writable by UID 1000, the container's user. |
 | `data/` | `/app/data` | Optional. The "try a sample" buttons: BraTS case `data/raw/brats2021/BraTS2021_00003/` and the cleaned classification test set in `data/processed/`. Without them those buttons report that the sample is missing; your own uploads still work. |
 | `frontend/public/generated/` | `/app/public/generated` | Optional. The Overview's 3D render (`python -m src.visualization.render_hero`). Without it the Overview shows a note in its place. |
 
@@ -325,7 +331,20 @@ docker compose -f docker-compose.yml -f docker-compose.gpu.yml up --build    # N
   all work. Set them under `api.environment` in `docker-compose.yml`.
 - **API address for the browser:** the browser calls the API at `http://localhost:8010`, which is
   fixed into the web client when its image is built. To serve the API elsewhere, change the
-  `NEXT_PUBLIC_API_URL` build argument and add the web client's origin to `BT_CORS_ORIGINS`.
+  `NEXT_PUBLIC_API_URL` build argument and add the web client's origin to the API's allowed
+  origins: `ALLOWED_ORIGIN=https://... docker compose up` adds it to the local ones.
+
+## Deployment
+
+The app runs on free tiers: the API as a Docker Space on Hugging Face (CPU), the web client on
+Vercel. **[DEPLOYMENT.md](DEPLOYMENT.md)** lists every step.
+
+- **Space contents:** `deploy/huggingface/build_space.py` assembles them: the code, the five
+  sample images and the sample results computed in advance. The sample patient's raw BraTS
+  volumes are never deployed or served there; only results derived from them are.
+- **Weights:** the container downloads them from the release when it starts.
+- **Connecting the two:** Vercel's `NEXT_PUBLIC_API_URL` points the site at the Space, and the
+  Space's `ALLOWED_ORIGIN` allows the site to call it.
 
 ## Data and terms of use
 
@@ -373,6 +392,8 @@ reports/     final_results.md and machine-readable results in reports/results/
 tests/       Tests for the API, job queue, models, losses, preprocessing and training setup
 models/      Trained checkpoints (gitignored; python -m src.download_weights)
 docs/        Screenshots for this README
+
+deploy/      Hugging Face Space card and bundle script                           (DEPLOYMENT.md)
 
 docker-compose.yml, docker-compose.gpu.yml   Docker setup (backend/Dockerfile, frontend/Dockerfile)
 requirements*.txt                            Python dependencies: core, API, hero render

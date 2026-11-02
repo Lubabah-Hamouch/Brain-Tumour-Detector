@@ -95,6 +95,18 @@ class JobStore:
         self._executor.submit(self._run, job, work)
         return job.id
 
+    def add_complete(self, kind, stages, result):
+        """Record a job whose result is already known (a pre-computed sample) as complete, without
+        queueing any work. Its stages are complete and took no time."""
+        now = time.time()
+        job = Job(id=uuid.uuid4().hex, kind=kind, created=now, started=now, finished=now, status="complete",
+                  result=result, stages=[Stage(n, l, w, status="complete", fraction=1.0, started=now, finished=now)
+                                         for n, l, w in stages])
+        with self._lock:
+            self._jobs[job.id] = job
+            self._evict()
+        return job.id
+
     def get(self, job_id):
         with self._lock:
             job = self._jobs.get(job_id)

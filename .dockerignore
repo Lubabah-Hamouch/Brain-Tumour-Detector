@@ -1,5 +1,6 @@
 # Build context for backend/Dockerfile. The image gets code, the evaluation results and the split
-# manifests only: datasets, weights and credentials are mounted or kept out (see README, "Docker").
+# manifests only: datasets, weights and credentials are downloaded, mounted or kept out (see README,
+# "Docker").
 *
 !backend/
 !src/
@@ -8,5 +9,6 @@
 !reports/final_results.md
 !reports/results/
 !data/manifests/
+!models/.gitkeep
 **/__pycache__/
 **/*.py[cod]

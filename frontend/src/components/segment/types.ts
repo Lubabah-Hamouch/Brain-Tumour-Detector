@@ -10,12 +10,13 @@ export type Run = {
   /** performance.now() when the visitor pressed Run. */
   startedAt: number;
   header: NiftiHeader | null;
-  files: Record<SequenceField, File>;
-  /** The sample case's ID when the files came from the sample study. */
+  /** The uploaded files; null for the sample study's pre-computed result, which uploads nothing. */
+  files: Record<SequenceField, File> | null;
+  /** The sample case's ID when the run is the sample study. */
   sample: string | null;
   /** Set once the upload is accepted and the job exists. */
   statusUrl: string | null;
-  /** Upload plus the server's synchronous checks, measured in the browser. */
+  /** Upload plus the server's synchronous checks (or the sample request), measured in the browser. */
   uploadSeconds: number | null;
   preview: Preview | null;
 };

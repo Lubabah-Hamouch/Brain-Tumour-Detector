@@ -145,8 +145,15 @@ async function HeadlineResults() {
     return (
       <section aria-label="Headline results" className={styles.results}>
         <p className={styles.unavailable}>
-          Test results are unavailable: {error.message} Start the API with{" "}
-          <code className="mono">uvicorn backend.main:app --port 8010</code> and reload.
+          Test results are unavailable: {error.message}{" "}
+          {process.env.NODE_ENV === "production" ? (
+            // A deployed API that sleeps when idle takes a few minutes to wake up.
+            "The API may be starting up; reload in a few minutes."
+          ) : (
+            <>
+              Start the API with <code className="mono">uvicorn backend.main:app --port 8010</code> and reload.
+            </>
+          )}
         </p>
       </section>
     );

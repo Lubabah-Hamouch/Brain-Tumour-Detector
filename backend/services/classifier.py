@@ -54,7 +54,7 @@ class ClassifierService:
         except (UnidentifiedImageError, OSError, ValueError) as exc:
             raise ApiError(422, "unreadable_image", f"The file could not be decoded as an image ({exc}).") from exc
 
-    def predict(self, img, name="", base_url=""):
+    def predict(self, img, name="", base_url="", result_id=None):
         warnings = []
         grayscale = is_grayscale(img)
         if min(img.size) < MIN_SIDE:
@@ -101,7 +101,8 @@ class ClassifierService:
             "model": {"checkpoint": self.checkpoint_name, **self.info},
             "warnings": warnings,
         }
-        result_id = self.results.put({"name": name, "model_input": boxed_arr, "cam": cam, "result": result, "png": None})
+        result_id = self.results.put({"name": name, "model_input": boxed_arr, "cam": cam, "result": result, "png": None},
+                                     result_id)
         return {"result_id": result_id, "report_url": f"{base_url}/api/classify/{result_id}/report.png", **result}
 
     def report_png(self, result_id):

@@ -6,8 +6,13 @@ from backend.schemas.segmentation import SegmentationResponse
 
 class JobAccepted(BaseModel):
     job_id: str
-    status: str = Field(description="Always 'queued' on submission")
+    status: str = Field(description="'queued' on submission; 'complete' for the sample study, whose result is "
+                                    "pre-computed")
     status_url: str = Field(description="Poll this URL (GET) for progress and the result")
+
+
+class SampleStudyAccepted(JobAccepted):
+    case: str = Field(description="The sample study's case ID")
 
 
 class JobStage(BaseModel):
