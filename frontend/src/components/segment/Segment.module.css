@@ -132,6 +132,11 @@ section.wide {
   gap: 4px;
 }
 
+.seqPick {
+  display: flex;
+  align-items: center;
+}
+
 .sequence select {
   min-height: 34px;
   padding: 0 8px;
@@ -179,7 +184,7 @@ section.wide {
 
 .slot {
   display: grid;
-  grid-template-columns: 64px minmax(0, 1fr) 16px;
+  grid-template-columns: 76px minmax(0, 1fr) 16px;
   gap: 12px;
   align-items: center;
   min-height: 40px;
@@ -388,6 +393,17 @@ button.seqButton {
   display: flex;
   flex-wrap: wrap;
   gap: 4px 24px;
+}
+
+/* What the sequence on screen shows; always visible, so touch screens get it without hovering. */
+.seqHint {
+  width: 100%;
+  max-width: 720px;
+  margin: -6px 0 0;
+}
+
+.seqHintName {
+  color: var(--color-text);
 }
 
 .groupTerm {

@@ -42,6 +42,10 @@ export function SegmentScreen() {
   const [run, setRun] = useState<Run | null>(null);
   const [result, setResult] = useState<SegmentationResult | null>(null);
   const [showResults, setShowResults] = useState(false);
+  // Results open at the top, on the viewer, wherever the processing screen was scrolled to.
+  useEffect(() => {
+    if (showResults) window.scrollTo({ top: 0 });
+  }, [showResults]);
   const runCounter = useRef(0);
 
   const evaluation = useMemo(() => evaluate(files), [files]);
@@ -160,6 +164,7 @@ export function SegmentScreen() {
     setSampleCase(null);
     setRunError(null);
     if (demo) router.replace("/segment");
+    window.scrollTo({ top: 0 });
   }, [backToFiles, demo, router]);
 
   if (run && result && showResults) {

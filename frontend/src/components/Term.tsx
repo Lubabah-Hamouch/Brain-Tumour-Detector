@@ -1,6 +1,6 @@
 "use client";
 
-import { useCallback, useEffect, useId, useRef, useState, type ReactNode } from "react";
+import { useCallback, useEffect, useId, useState, type ReactNode } from "react";
 import { createPortal } from "react-dom";
 
 import { GLOSSARY, type GlossaryKey } from "@/lib/glossary";
@@ -13,24 +13,26 @@ const WIDTH = 288;
 const GAP = 8;
 
 /**
- * A domain term with a small "?" that reveals a plain-language definition on hover, focus or tap.
- * The definition is drawn above the page (a portal), so tables and scroll boxes never clip it.
+ * A glossary definition anchored to an element: position, dismissal (Escape, outside press, scroll,
+ * resize) and the popover itself, drawn above the page (a portal) so tables and scroll boxes never
+ * clip it.
  */
-export function Term({ k, children }: { k: GlossaryKey; children?: ReactNode }) {
+export function useDefinition<T extends HTMLElement>(k: GlossaryKey) {
   const entry = GLOSSARY[k];
   const id = useId();
-  const button = useRef<HTMLButtonElement>(null);
+  // A callback ref kept in state, so the element is a normal value during render.
+  const [anchor, setAnchor] = useState<T | null>(null);
   const [pos, setPos] = useState<Position | null>(null);
   const [pinned, setPinned] = useState(false);
 
   const show = useCallback(() => {
-    const r = button.current?.getBoundingClientRect();
+    const r = anchor?.getBoundingClientRect();
     if (!r) return;
     const vw = document.documentElement.clientWidth;
     const left = Math.min(Math.max(16, r.left + r.width / 2 - WIDTH / 2), vw - WIDTH - 16);
     const above = r.bottom + GAP + 160 > window.innerHeight && r.top > 200;
     setPos({ left: Math.max(16, left), top: above ? r.top - GAP : r.bottom + GAP, above });
-  }, []);
+  }, [anchor]);
   const hide = useCallback(() => {
     setPos(null);
     setPinned(false);
@@ -40,7 +42,7 @@ export function Term({ k, children }: { k: GlossaryKey; children?: ReactNode }) 
     if (!pos) return;
     const onKey = (e: KeyboardEvent) => e.key === "Escape" && hide();
     const onPointer = (e: PointerEvent) => {
-      if (!button.current?.contains(e.target as Node)) hide();
+      if (!anchor?.contains(e.target as Node)) hide();
     };
     window.addEventListener("keydown", onKey);
     window.addEventListener("pointerdown", onPointer);
@@ -52,22 +54,41 @@ export function Term({ k, children }: { k: GlossaryKey; children?: ReactNode }) 
       window.removeEventListener("scroll", hide, true);
       window.removeEventListener("resize", hide);
     };
-  }, [pos, hide]);
+  }, [pos, hide, anchor]);
+
+  const popover =
+    pos &&
+    createPortal(
+      <span id={id} role="tooltip" className={styles.popover} data-above={pos.above} style={{ left: pos.left, top: pos.top, width: WIDTH }}>
+        <strong>{entry.term}</strong>
+        <span>{entry.text}</span>
+      </span>,
+      document.body,
+    );
+
+  return { entry, id, setAnchor, open: Boolean(pos), pinned, setPinned, show, hide, popover };
+}
+
+/**
+ * A domain term with a small "?" that reveals a plain-language definition on hover, focus or tap.
+ */
+export function Term({ k, children }: { k: GlossaryKey; children?: ReactNode }) {
+  const { entry, id, setAnchor, open, pinned, setPinned, show, hide, popover } = useDefinition<HTMLButtonElement>(k);
 
   return (
     <span className={styles.term}>
       {children}
       <button
-        ref={button}
+        ref={setAnchor}
         type="button"
         className={styles.mark}
         aria-label={`What is ${entry.term}?`}
-        aria-expanded={Boolean(pos)}
-        aria-describedby={pos ? id : undefined}
+        aria-expanded={open}
+        aria-describedby={open ? id : undefined}
         onMouseEnter={show}
-        onMouseLeave={() => !pinned && setPos(null)}
+        onMouseLeave={() => !pinned && hide()}
         onFocus={show}
-        onBlur={() => !pinned && setPos(null)}
+        onBlur={() => !pinned && hide()}
         onClick={() => {
           if (pinned) hide();
           else {
@@ -78,20 +99,7 @@ export function Term({ k, children }: { k: GlossaryKey; children?: ReactNode }) 
       >
         ?
       </button>
-      {pos &&
-        createPortal(
-          <span
-            id={id}
-            role="tooltip"
-            className={styles.popover}
-            data-above={pos.above}
-            style={{ left: pos.left, top: pos.top, width: WIDTH }}
-          >
-            <strong>{entry.term}</strong>
-            <span>{entry.text}</span>
-          </span>,
-          document.body,
-        )}
+      {popover}
     </span>
   );
 }

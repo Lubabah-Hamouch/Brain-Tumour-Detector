@@ -6,6 +6,7 @@ import { Button } from "@/components/Button";
 import { CheckIcon, ErrorIcon } from "@/components/icons";
 import { Term } from "@/components/Term";
 import ws from "@/components/workspace/Workspace.module.css";
+import { sequenceTerm } from "@/lib/glossary";
 import { formatBytes } from "@/lib/imageCheck";
 import { evaluate, MAX_VOLUME_MB, SEQUENCES, sequenceOf, type Sequence, type StudyFile } from "@/lib/studyFiles";
 
@@ -126,7 +127,9 @@ export function UploadView({ files, evaluation, sampleCase, loadingSample, runEr
             <div className={`label ${styles.tableHead}`}>
               <span>File</span>
               <span className={styles.right}>Size</span>
-              <span>Sequence</span>
+              <span>
+                <Term k="sequences">Sequence</Term>
+              </span>
               <span>Check</span>
               <span />
             </div>
@@ -142,23 +145,27 @@ export function UploadView({ files, evaluation, sampleCase, loadingSample, runEr
                   <span className={`mono ${styles.size}`}>{formatBytes(f.file.size)}</span>
                   <span className={styles.sequence}>
                     {nifti && (
-                      <select
-                        aria-label={`Sequence for ${f.file.name}`}
-                        value={seq ?? ""}
-                        data-problem={!status.ok && !status.pending}
-                        onChange={(event) => on.onAssign(f.id, event.target.value as Sequence)}
-                      >
-                        {!seq && (
-                          <option value="" disabled>
-                            Choose…
-                          </option>
-                        )}
-                        {SEQUENCES.map((s) => (
-                          <option key={s} value={s}>
-                            {s}
-                          </option>
-                        ))}
-                      </select>
+                      <span className={styles.seqPick}>
+                        <select
+                          aria-label={`Sequence for ${f.file.name}`}
+                          value={seq ?? ""}
+                          data-problem={!status.ok && !status.pending}
+                          onChange={(event) => on.onAssign(f.id, event.target.value as Sequence)}
+                        >
+                          {!seq && (
+                            <option value="" disabled>
+                              Choose…
+                            </option>
+                          )}
+                          {SEQUENCES.map((s) => (
+                            <option key={s} value={s}>
+                              {s}
+                            </option>
+                          ))}
+                        </select>
+                        {/* The definition of the chosen sequence: options in a <select> cannot carry one. */}
+                        <Term k={seq ? sequenceTerm(seq) : "sequences"} />
+                      </span>
                     )}
                     <span className="caption">{status.source}</span>
                   </span>
@@ -209,7 +216,9 @@ export function UploadView({ files, evaluation, sampleCase, loadingSample, runEr
           </p>
           {evaluation.slots.map((slot) => (
             <div key={slot.name} className={styles.slot} data-ok={Boolean(slot.file)}>
-              <span className={styles.slotName}>{slot.name}</span>
+              <span className={styles.slotName}>
+                <Term k={sequenceTerm(slot.name)}>{slot.name}</Term>
+              </span>
               <span className={`mono ${styles.slotFile}`}>{slot.file?.file.name ?? "Missing"}</span>
               {slot.file && (
                 <svg width="14" height="14" viewBox="0 0 14 14" aria-label="ready">

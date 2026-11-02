@@ -1,4 +1,4 @@
-/* Glossary marks: quiet until asked. Greyscale only. */
+/* Glossary marks: quiet until asked, but visible enough to be found. Greyscale only. */
 
 .term {
   white-space: nowrap;
@@ -16,8 +16,8 @@
   border: 0;
   border-radius: 50%;
   background: transparent;
-  box-shadow: inset 0 0 0 1px var(--color-hairline-strong);
-  color: var(--color-text-muted);
+  box-shadow: inset 0 0 0 1px var(--color-text-muted);
+  color: var(--color-text-secondary);
   font-family: var(--font-sans), system-ui, sans-serif;
   font-size: var(--text-12);
   font-weight: 600;
@@ -41,7 +41,7 @@
 .mark:hover,
 .mark[aria-expanded="true"] {
   color: var(--color-text-strong);
-  box-shadow: inset 0 0 0 1px var(--color-text-muted);
+  box-shadow: inset 0 0 0 1px var(--color-text-secondary);
 }
 
 .popover {

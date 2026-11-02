@@ -3,7 +3,9 @@
 import Image from "next/image";
 import { useId, useState } from "react";
 
+import { Button } from "@/components/Button";
 import { Term } from "@/components/Term";
+import { regionColor } from "@/design/tokens";
 import { useEntryProgress } from "@/design/useEntryProgress";
 import { CLASS_LABELS, type ClassificationResult, type ResultsSummary, type Sample } from "@/lib/api";
 
@@ -42,8 +44,15 @@ function runnerUpNote(result: ClassificationResult, summary: ResultsSummary | nu
   return `${sentence} ${label(pair.classes[0])} and ${label(pair.classes[1]).toLowerCase()} account for ${pair.errors} of the ${clf.test_errors} test-set errors${rank}.`;
 }
 
+/** The Grad-CAM outline as one SVG path in model-input pixels. */
+const contourPath = (lines: [number, number][][]) =>
+  lines.map((line) => `M${line.map(([x, y]) => `${x} ${y}`).join("L")}Z`).join("");
+
 export function ResultView({ result, selected, summary, samples, running, onFile, onSample, onReset }: Props) {
-  const [mode, setMode] = useState<Mode>("Overlay");
+  // For "no tumour" the heatmap marks what the model looked at to decide, which a visitor would read
+  // as a lesion; it starts hidden and stays one click away.
+  const negative = result.predicted_class === "notumor";
+  const [mode, setMode] = useState<Mode>(negative ? "Input" : "Overlay");
   const [opacity, setOpacity] = useState(85);
   const uploadId = useId();
   const e = useEntryProgress();
@@ -74,7 +83,11 @@ export function ResultView({ result, selected, summary, samples, running, onFile
         <div
           className={styles.viewer}
           role="img"
-          aria-label={`${info.name} as the model sees it, with the Grad-CAM heatmap for ${predicted.toLowerCase()} in red`}
+          aria-label={
+            mode === "Input"
+              ? `${info.name} as the model sees it`
+              : `${info.name} as the model sees it, with the Grad-CAM heatmap for ${predicted.toLowerCase()} in red`
+          }
         >
           <div className={styles.viewerInner}>
             <Image
@@ -93,6 +106,14 @@ export function ResultView({ result, selected, summary, samples, running, onFile
               unoptimized
               style={{ opacity: heatOpacity }}
             />
+            <svg
+              className={`${styles.layer} ${styles.contour}`}
+              viewBox={`0 0 ${size} ${size}`}
+              aria-hidden="true"
+              style={{ opacity: heatOpacity }}
+            >
+              <path d={contourPath(result.gradcam.contour)} stroke={regionColor.ET} />
+            </svg>
           </div>
         </div>
 
@@ -117,7 +138,25 @@ export function ResultView({ result, selected, summary, samples, running, onFile
             />
             <span className={`mono ${styles.heatValue}`}>{opacity}%</span>
           </label>
-          <span className="caption">From a 12 × 12 feature map · indicative only</span>
+          <span className="caption">From a 12 × 12 feature map · line at half the peak · indicative only</span>
+        </div>
+        {negative && (
+          <p className={`caption ${styles.negativeNote}`}>
+            The heatmap is off for a “No tumour” result. It shows what the model focused on to reach its prediction, so
+            a highlighted region does not indicate a lesion. Switch to Heatmap or Overlay to see it.
+          </p>
+        )}
+
+        {/* Narrow screens: the prediction rail is below the image, so keep the answer and a way to
+            start again in view. */}
+        <div className={styles.mobileResult}>
+          <span className={styles.mobileResultText}>
+            <span>{predicted}</span>
+            <span className="mono caption">{result.confidence.toFixed(3)}</span>
+          </span>
+          <Button variant="ghost" onClick={onReset} className={styles.mobileReset}>
+            New image
+          </Button>
         </div>
       </main>
 
@@ -165,10 +204,12 @@ export function ResultView({ result, selected, summary, samples, running, onFile
           <a className={styles.download} href={result.report_url} download>
             Download result (PNG)
           </a>
-          <span className="caption">One image with the slice, the Grad-CAM overlay, the prediction and all four probabilities.</span>
-          <button type="button" className={styles.textButton} onClick={onReset}>
-            <span className="u">Classify another image</span>
-          </button>
+          <span className="caption">
+            One image with the slice{negative ? "" : ", the Grad-CAM overlay"}, the prediction and all four probabilities.
+          </span>
+          <Button variant="ghost" block onClick={onReset}>
+            Classify another image
+          </Button>
         </section>
 
         <section className={styles.details}>

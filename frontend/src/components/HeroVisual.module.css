@@ -142,3 +142,10 @@
 .captionLink:hover {
   color: var(--color-text-strong);
 }
+
+/* Without its animation the sweep would rest as a line across the top edge. */
+@media (prefers-reduced-motion: reduce) {
+  .sweep {
+    display: none;
+  }
+}

@@ -7,6 +7,8 @@ import type { NextConfig } from "next";
 const appRoot = path.resolve(__dirname);
 
 const nextConfig: NextConfig = {
+  // A self-contained server in .next/standalone, used by the Docker image.
+  output: "standalone",
   cacheComponents: true,
   partialPrefetching: true,
   outputFileTracingRoot: appRoot,

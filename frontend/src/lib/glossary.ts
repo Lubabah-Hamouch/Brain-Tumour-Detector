@@ -15,6 +15,26 @@ export const GLOSSARY = {
       "anatomy, T1ce is T1 after a contrast injection that lights up active tumour, and T2 shows fluid. The model " +
       "reads all four together.",
   },
+  flair: {
+    term: "FLAIR",
+    text:
+      "Fluid-attenuated inversion recovery: a T2-weighted scan with the fluid signal suppressed, so swelling (edema) " +
+      "around a tumour stands out bright. Best for seeing the whole tumour.",
+  },
+  t1: {
+    term: "T1",
+    text: "The plain anatomical scan: grey and white matter are clearly separated, and fluid is dark. No contrast agent.",
+  },
+  t1ce: {
+    term: "T1ce",
+    text:
+      "T1 after a contrast agent (gadolinium) is injected. Actively growing tumour takes up the agent and lights up, " +
+      "which is how the enhancing tumour is found.",
+  },
+  t2: {
+    term: "T2",
+    text: "A scan where fluid is bright: it shows swelling and the fluid-filled spaces of the brain, and helps outline the tumour core.",
+  },
   coregistered: {
     term: "Co-registered",
     text: "Aligned to one shared grid, so the same voxel in each scan is the same point in the head.",
@@ -87,8 +107,9 @@ export const GLOSSARY = {
   gradcam: {
     term: "Grad-CAM",
     text:
-      "A heatmap of the image areas that most influenced the prediction. It is coarse (12 × 12 cells) and shows " +
-      "where the model looked, not a precise outline of the tumour.",
+      "A heatmap of the image areas that most influenced the prediction, whatever that prediction is. It is coarse " +
+      "(12 × 12 cells) and shows where the model looked, not a precise outline of the tumour. For a “No tumour” " +
+      "result, a highlighted region does not indicate a lesion.",
   },
   letterbox: {
     term: "Letterbox",
@@ -143,3 +164,6 @@ export const GLOSSARY = {
 } as const;
 
 export type GlossaryKey = keyof typeof GLOSSARY;
+
+/** Glossary entry for one MRI sequence, by its display name (FLAIR, T1, T1ce, T2). */
+export const sequenceTerm = (name: string) => name.toLowerCase() as "flair" | "t1" | "t1ce" | "t2";

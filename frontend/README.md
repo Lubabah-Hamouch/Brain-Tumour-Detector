@@ -7,7 +7,7 @@ the FastAPI backend in `../backend`.
 |---|---|
 | `/` Overview | built: headline test results from `GET /api/results/summary`, hero render, index, pipeline |
 | `/segment` | built: four NIfTI files (or the sample study) with sequence detection and header checks → background job with live stages → axial, coronal, sagittal and interactive 3D views, volumes and downloads (`POST /api/segment`, `GET /api/jobs/{id}`, `GET /api/sample-study`, `GET /api/segment/{id}/mesh.glb`) |
-| `/classify` | built: upload or test-set sample → checked preview → prediction with Grad-CAM viewer and PNG download (`POST /api/classify`, `GET /api/samples`) |
+| `/classify` | built: upload or test-set sample → checked preview → prediction with Grad-CAM viewer (soft heatmap with a half-peak outline; the plain image first for "No tumour") and PNG download (`POST /api/classify`, `GET /api/samples`) |
 | `/model-card` | built: specification, test tables with paired comparisons, stress-test chart and limitations, all from `GET /api/results/model-card` |
 
 ## Running locally
@@ -38,6 +38,24 @@ The API address comes from `API_URL` (server side) or `NEXT_PUBLIC_API_URL`, def
 `http://127.0.0.1:8010`. If the API is not running, the Overview still renders and the results
 section says so, with the command to start it.
 
+## Docker
+
+`Dockerfile` builds the production site as a standalone Next.js server (`output: "standalone"` in
+`next.config.ts`) on Node 22. Normally it runs through `docker-compose.yml` at the project root,
+together with the API (see "Running with Docker" in the root README).
+
+- **`NEXT_PUBLIC_API_URL`** (build argument, default `http://localhost:8010`): where the browser
+  reaches the API. It is fixed into the client bundle at build time.
+- **`API_URL`** (runtime variable): where the server reaches the API. Compose sets it to
+  `http://api:8010` on the internal network.
+- **Hero image:** mount it at `/app/public/generated` (compose mounts `public/generated/`). It is
+  not copied into the image.
+
+```bash
+docker build -t brain-tumour-web .
+docker run --rm -p 3000:3000 -e API_URL=http://host.docker.internal:8010 brain-tumour-web
+```
+
 ## 3D view
 
 The Segment results have a fourth view, **3D**, next to Axial, Coronal and Sagittal
@@ -65,7 +83,8 @@ the real upload and job, and opens the result in 3D.
 ## Hero image
 
 The Overview hero is a 3D render of a held-out test patient's brain and the ensemble's predicted
-tumour regions. It is patient-derived, so it is not committed: `public/generated/` is ignored.
+tumour regions. It is generated from the patient's volumes, so it is not committed:
+`public/generated/` is ignored. (It does appear in the Overview screenshot in `docs/screenshots/`.)
 Generate it with `src/visualization/render_hero.py` (instructions in its docstring; needs
 `requirements-render.txt`). Without it the page shows a short note in its place.
 
@@ -91,6 +110,17 @@ src/
   lib/nifti.ts          NIfTI header and single-slice reading in the browser (streams gzip)
   lib/studyFiles.ts     sequence detection from file names, per-file and cross-file checks
 ```
+
+## Glossary
+
+Domain terms carry a small "?" (`src/components/Term.tsx`) that shows a plain-language definition
+from `src/lib/glossary.ts` on hover, keyboard focus or tap. The MRI sequences get extra help, since
+every Segment screen depends on them:
+
+- the FLAIR, T1, T1ce and T2 toggles show their own definition on hover, focus or tap (the
+  `useDefinition` hook from `Term.tsx`), and a line under the toolbar always says what the
+  sequence on screen shows;
+- on the upload screen, each file's sequence menu and each sequence in the sidebar has its own "?".
 
 ## Design system
 

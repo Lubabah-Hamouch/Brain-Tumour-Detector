@@ -5,6 +5,8 @@ import io
 import numpy as np
 from matplotlib import colormaps
 from PIL import Image
+from scipy.ndimage import gaussian_filter
+from skimage.measure import approximate_polygon, find_contours
 
 
 def png_base64(array):
@@ -28,6 +30,31 @@ def heat_rgba(heat):
     rgb = HEAT_STOPS[lo] * (1 - frac) + HEAT_STOPS[lo + 1] * frac
     alpha = np.clip((h - 0.15) / 0.85, 0, 1) ** 0.9 * 0.92
     return np.dstack([rgb, 255 * alpha]).round().astype(np.uint8)
+
+
+def smooth_cam(cam, cells=12):
+    """Grad-CAM bilinearly upsampled from a cells x cells map -> a smooth [0, 1] map for display.
+
+    Bilinear interpolation of so coarse a grid leaves cross-shaped ridges along the cell edges. A
+    Gaussian with a sigma of half a cell removes them without adding detail the map does not have.
+    """
+    smooth = gaussian_filter(np.asarray(cam, dtype=np.float32), sigma=cam.shape[0] / cells / 2)
+    return smooth / max(float(smooth.max()), 1e-8)
+
+
+# Display outline of the Grad-CAM: half of its peak value.
+CAM_CONTOUR_LEVEL = 0.5
+
+
+def cam_contour(cam, level=CAM_CONTOUR_LEVEL):
+    """Outline of cam >= level as polylines of [x, y] pixel coordinates, simplified to ~1 px."""
+    padded = np.pad(cam, 1)  # closes outlines that touch the image edge
+    lines = []
+    for line in find_contours(padded, level):
+        line = approximate_polygon(line - 1, tolerance=0.75)
+        if len(line) >= 3:
+            lines.append([[round(float(c), 1), round(float(r), 1)] for r, c in line])
+    return lines
 
 
 def heatmap_overlay(gray, heat, alpha=0.4):

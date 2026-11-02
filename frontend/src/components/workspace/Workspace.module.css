@@ -752,3 +752,65 @@
 .dropCompact {
   aspect-ratio: 3 / 2;
 }
+
+/* ---- Result: Grad-CAM outline and notes ---- */
+
+/* The heatmap's half-peak outline, drawn as vectors so it stays crisp at any size. */
+.contour {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  pointer-events: none;
+}
+
+.contour path {
+  fill: none;
+  stroke-width: 1.5;
+  stroke-linejoin: round;
+  vector-effect: non-scaling-stroke;
+}
+
+.negativeNote {
+  width: 100%;
+  max-width: 720px;
+  margin: -4px 0 0;
+}
+
+/* The result and a way to start again, for narrow screens, where the rail is below the viewer
+   (Classify: prediction and "New image"; Segment: study, whole-tumour volume and "New study"). */
+.mobileResult {
+  display: none;
+}
+
+@media (max-width: 1023px) {
+  .mobileResult {
+    position: sticky;
+    bottom: 0;
+    z-index: 5;
+    width: 100%;
+    max-width: 720px;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 16px;
+    padding: 12px 0 calc(12px + env(safe-area-inset-bottom));
+    background: var(--color-bg);
+    box-shadow: inset 0 1px 0 var(--color-hairline);
+  }
+}
+
+.mobileResultText {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  min-width: 0;
+  font-weight: 600;
+  font-size: var(--text-16);
+  color: var(--color-text-strong);
+}
+
+.mobileReset {
+  min-height: 44px;
+  padding: 0 20px;
+}

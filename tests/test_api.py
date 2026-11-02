@@ -81,6 +81,25 @@ def test_classify_response_shape(client):
     assert red.size == (384, 384) and red.mode == "RGBA"
     assert body["image"]["grayscale"] is True
     assert body["report_url"].endswith(f"/api/classify/{body['result_id']}/report.png")
+    # The half-peak outline: closed polylines inside the model input, around the heatmap's peak.
+    cam = np.asarray(heat, dtype=np.float32) / 255
+    assert body["gradcam"]["contour_level"] == 0.5 and body["gradcam"]["contour"]
+    for line in body["gradcam"]["contour"]:
+        xy = np.asarray(line)
+        assert len(xy) >= 3 and (xy >= -1).all() and (xy <= 384).all()
+    py, px = np.unravel_index(cam.argmax(), cam.shape)
+    xs, ys = zip(*(p for line in body["gradcam"]["contour"] for p in line))
+    assert min(xs) <= px <= max(xs) and min(ys) <= py <= max(ys)
+
+
+def test_classify_report_omits_heatmap_for_no_tumour(client):
+    """A no-tumour report shows the plain slice: no Grad-CAM reds in the image panel."""
+    images = sorted((CLEAN_DIR / "test" / "notumor").glob("*.jpg"))[:5]
+    body = next(b for b in (upload_image(client, p).json() for p in images) if b["predicted_class"] == "notumor")
+    report = np.asarray(Image.open(io.BytesIO(client.get(body["report_url"].replace("http://testserver", "")).content)).convert("RGB"))
+    panel = report[300:1900]  # the image panel, between the header and the prediction block
+    r, g, b = (panel[..., i].astype(int) for i in range(3))
+    assert not ((r - np.maximum(g, b)) > 40).any()
 
 
 def test_classify_report_png(client):

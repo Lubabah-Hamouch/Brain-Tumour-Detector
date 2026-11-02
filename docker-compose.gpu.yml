@@ -1,0 +1,16 @@
+# GPU override: a CUDA build of PyTorch and access to the host's NVIDIA GPU. Needs the NVIDIA
+# Container Toolkit (included with Docker Desktop's WSL 2 backend on Windows).
+#   docker compose -f docker-compose.yml -f docker-compose.gpu.yml up --build
+services:
+  api:
+    build:
+      args:
+        TORCH_VARIANT: cu118
+    image: brain-tumour-api:cu118
+    deploy:
+      resources:
+        reservations:
+          devices:
+            - driver: nvidia
+              count: all
+              capabilities: [gpu]

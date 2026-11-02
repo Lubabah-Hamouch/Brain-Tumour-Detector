@@ -15,7 +15,7 @@ from pathlib import Path
 import numpy as np
 from PIL import Image, ImageDraw, ImageFont
 
-from backend.services.imaging import heat_rgba
+from backend.services.imaging import cam_contour, heat_rgba
 
 FONTS = Path(__file__).resolve().parent.parent / "assets" / "fonts"
 SCALE = 2
@@ -30,6 +30,7 @@ HAIRLINE = "#24262A"
 TRACK = "#2A2C30"
 BAR = "#6A6E74"
 FINDING = "#D7263D"
+CONTOUR = "#FFC2CA"  # Grad-CAM outline: the palest finding colour, as on the result screen
 
 CLASS_NAMES = {"glioma": "Glioma", "meningioma": "Meningioma", "notumor": "No tumour", "pituitary": "Pituitary"}
 
@@ -127,14 +128,21 @@ def classification_report(*, name, image_info, model_input, cam, result, exporte
     px = round((PAD + (right - PAD - side) / 2) * SCALE)
     py = round((panel_top + (panel_bottom - panel_top - side) / 2) * SCALE)
     target = (round(side * SCALE),) * 2
+    # For "no tumour" the heatmap would mark what the model looked at, which reads as a lesion, so
+    # the report shows the plain slice, like the result screen's default view.
+    predicted = result["predicted_class"]
+    show_heat = predicted != "notumor"
     base = Image.fromarray(model_input).convert("RGB").resize(target, Image.BICUBIC)
-    heat = Image.fromarray(heat_rgba(cam)).resize(target, Image.BILINEAR)
-    heat.putalpha(heat.getchannel("A").point(lambda a: round(a * 0.85)))
-    base.paste(heat, (0, 0), heat)
+    if show_heat:
+        heat = Image.fromarray(heat_rgba(cam)).resize(target, Image.BILINEAR)
+        heat.putalpha(heat.getchannel("A").point(lambda a: round(a * 0.85)))
+        base.paste(heat, (0, 0), heat)
+        draw, k = ImageDraw.Draw(base), target[0] / size
+        for line in cam_contour(cam):
+            draw.line([(x * k, y * k) for x, y in line + line[:1]], fill=CONTOUR, width=round(1.5 * SCALE), joint="curve")
     c.image.paste(base, (px, py))
 
     # Prediction.
-    predicted = result["predicted_class"]
     label(c, PAD, grid_top + 12, "Prediction")
     c.text(PAD, grid_top + 12 + 10 + 32, CLASS_NAMES.get(predicted, predicted), sans(40, 700), TEXT)
     c.text(PAD, grid_bottom - 10, f"{result['confidence']:.3f}", mono(64, 300), TEXT, tracking=-0.04)
@@ -160,8 +168,9 @@ def classification_report(*, name, image_info, model_input, cam, result, exporte
     # Footer.
     c.hline(PAD, right, footer_top)
     epoch = result.get("model", {}).get("checkpoint_epoch")
-    c.text(PAD, footer_top + 16 + 13, "Brain Tumour MRI · EfficientNetV2-S · red: Grad-CAM for the predicted class, "
-                                      "from a 12 × 12 feature map", sans(12), MUTED)
+    legend = ("red: Grad-CAM for the predicted class, from a 12 × 12 feature map; line: half its peak" if show_heat else
+              "Grad-CAM not drawn for a no-tumour prediction: it would mark what the model looked at, not a lesion")
+    c.text(PAD, footer_top + 16 + 13, f"Brain Tumour MRI · EfficientNetV2-S · {legend}", sans(12), MUTED)
     c.text(PAD, footer_top + 16 + 31, "Research use only. Not a medical device; must not inform diagnosis or treatment.",
            sans(12), MUTED)
     c.text(right, footer_top + 16 + 13, f"exported {exported:%Y-%m-%d}", mono(12), MUTED, anchor="rs")

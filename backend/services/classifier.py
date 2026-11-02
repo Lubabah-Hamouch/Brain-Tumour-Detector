@@ -18,7 +18,7 @@ from PIL import Image, UnidentifiedImageError
 
 from backend.services.cache import ResultCache
 from backend.services.errors import ApiError, relative_name
-from backend.services.imaging import heat_rgba, heatmap_overlay, png_base64
+from backend.services.imaging import CAM_CONTOUR_LEVEL, cam_contour, heat_rgba, heatmap_overlay, png_base64, smooth_cam
 from backend.services.report import classification_report, is_grayscale
 from src.data.classification_preprocess import CLASSES, letterbox, to_grayscale, to_tensor
 from src.models.classifier import EfficientNetV2Classifier
@@ -77,6 +77,7 @@ class ClassifierService:
             pred = int(probs.argmax())
             _, cam = grad_cam(self.model, x.clone(), pred)
             self.model.zero_grad(set_to_none=True)
+        cam = smooth_cam(cam)
 
         scale = self.image_size / max(gray.size)
         resized = (max(1, round(gray.width * scale)), max(1, round(gray.height * scale)))
@@ -94,7 +95,9 @@ class ClassifierService:
                         "heatmap_png": png_base64((255 * np.clip(cam, 0, 1)).astype(np.uint8)),
                         "heat_png": png_base64(heat_rgba(cam)),
                         "overlay_png": png_base64(heatmap_overlay(boxed_arr, cam)),
-                        "resolution_note": "Upsampled from the 12 x 12 last feature map; indicative, not a precise localisation."},
+                        "contour": cam_contour(cam), "contour_level": CAM_CONTOUR_LEVEL,
+                        "resolution_note": "Upsampled from the 12 x 12 last feature map and smoothed for display; "
+                                           "indicative, not a precise localisation."},
             "model": {"checkpoint": self.checkpoint_name, **self.info},
             "warnings": warnings,
         }

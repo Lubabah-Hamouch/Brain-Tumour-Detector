@@ -107,6 +107,7 @@ export function ClassifyScreen() {
     setSelected(null);
     setProblem(null);
     setRunError(null);
+    window.scrollTo({ top: 0 });
   }, []);
 
   if (done) {

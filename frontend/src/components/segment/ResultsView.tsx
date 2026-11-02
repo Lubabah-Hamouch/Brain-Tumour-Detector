@@ -4,11 +4,13 @@ import dynamic from "next/dynamic";
 import Image from "next/image";
 import { useState } from "react";
 
-import { Term } from "@/components/Term";
+import { Button } from "@/components/Button";
+import { Term, useDefinition } from "@/components/Term";
 import ws from "@/components/workspace/Workspace.module.css";
 import { regionColor } from "@/design/tokens";
 import { useEntryProgress } from "@/design/useEntryProgress";
 import type { LabelLayer, Plane, SegmentationResult, SequenceField } from "@/lib/api";
+import { sequenceTerm } from "@/lib/glossary";
 
 import styles from "./Segment.module.css";
 import type { Run } from "./types";
@@ -33,11 +35,11 @@ const PLANES: { key: Plane; name: string; axis: string }[] = [
   { key: "coronal", name: "Coronal", axis: "y" },
   { key: "sagittal", name: "Sagittal", axis: "x" },
 ];
-const SEQUENCES: { key: SequenceField; name: string }[] = [
-  { key: "flair", name: "FLAIR" },
-  { key: "t1", name: "T1" },
-  { key: "t1ce", name: "T1ce" },
-  { key: "t2", name: "T2" },
+const SEQUENCES: { key: SequenceField; name: string; hint: string }[] = [
+  { key: "flair", name: "FLAIR", hint: "swelling (edema) around the tumour shows bright" },
+  { key: "t1", name: "T1", hint: "plain anatomy, no contrast agent" },
+  { key: "t1ce", name: "T1ce", hint: "actively growing tumour lights up after a contrast injection" },
+  { key: "t2", name: "T2", hint: "fluid and swelling show bright" },
 ];
 const LABELS: { key: LabelLayer; value: number; name: string; swatch: string }[] = [
   { key: "edema", value: 2, name: "Edema", swatch: regionColor.WT },
@@ -174,17 +176,13 @@ export function ResultsView({ result, run, onNewStudy, initialView = "axial" }: 
           </div>
           <div className={ws.modes} role="group" aria-label="Base sequence">
             {SEQUENCES.map((s) => (
-              <button
+              <SequenceButton
                 key={s.key}
-                type="button"
-                className={`${ws.mode} ${styles.seqButton}`}
-                aria-pressed={sequence === s.key}
+                name={s.name}
+                pressed={sequence === s.key}
                 disabled={view3d}
-                title={view3d ? "Sequences apply to the slice views" : undefined}
-                onClick={() => setSequence(s.key)}
-              >
-                {s.name}
-              </button>
+                onSelect={() => setSequence(s.key)}
+              />
             ))}
             <span className={styles.groupTerm}>
               <Term k="sequences" />
@@ -202,6 +200,11 @@ export function ResultsView({ result, run, onNewStudy, initialView = "axial" }: 
             />
           </label>
         </div>
+        {!view3d && (
+          <p className={`caption ${styles.seqHint}`} aria-live="polite">
+            Showing <span className={styles.seqHintName}>{seqName}</span>: {SEQUENCES.find((s) => s.key === sequence)!.hint}.
+          </p>
+        )}
         <div className={styles.legend} role="group" aria-label="Labels shown">
           {LABELS.map((l) => (
             <button
@@ -218,6 +221,18 @@ export function ResultsView({ result, run, onNewStudy, initialView = "axial" }: 
           <span className={styles.legendTerm}>
             <Term k="labels" />
           </span>
+        </div>
+
+        {/* Narrow screens: the measurements rail is below the viewer, so keep the result and a way
+            to start again in view. */}
+        <div className={ws.mobileResult}>
+          <span className={ws.mobileResultText}>
+            <span>{result.study}</span>
+            <span className="mono caption">WT {result.regions.WT.volume_ml.toFixed(2)} mL</span>
+          </span>
+          <Button variant="ghost" onClick={onNewStudy} className={ws.mobileReset}>
+            New study
+          </Button>
         </div>
       </main>
 
@@ -278,9 +293,9 @@ export function ResultsView({ result, run, onNewStudy, initialView = "axial" }: 
               "The PNG is the slice on screen with the overlay burned in, for slides and reports."
             )}
           </span>
-          <button type="button" className={ws.textButton} onClick={onNewStudy}>
-            <span className="u">New study</span>
-          </button>
+          <Button variant="ghost" block onClick={onNewStudy}>
+            New study
+          </Button>
         </section>
 
         <section className={ws.details}>
@@ -335,5 +350,35 @@ export function ResultsView({ result, run, onNewStudy, initialView = "axial" }: 
         </p>
       </aside>
     </div>
+  );
+}
+
+/**
+ * A sequence toggle that also shows what the sequence is: on hover, on keyboard focus, and on a
+ * tap, which selects the sequence and shows its definition until the next tap elsewhere.
+ */
+function SequenceButton({ name, pressed, disabled, onSelect }: { name: string; pressed: boolean; disabled: boolean; onSelect: () => void }) {
+  const { id, setAnchor, open, show, hide, popover } = useDefinition<HTMLButtonElement>(sequenceTerm(name));
+  return (
+    <>
+      <button
+        ref={setAnchor}
+        type="button"
+        className={`${ws.mode} ${styles.seqButton}`}
+        aria-pressed={pressed}
+        aria-describedby={open ? id : undefined}
+        disabled={disabled}
+        title={disabled ? "Sequences apply to the slice views" : undefined}
+        onMouseEnter={show}
+        onMouseLeave={hide}
+        onFocus={show}
+        onBlur={hide}
+        onPointerUp={(event) => event.pointerType !== "mouse" && show()}
+        onClick={onSelect}
+      >
+        {name}
+      </button>
+      {popover}
+    </>
   );
 }

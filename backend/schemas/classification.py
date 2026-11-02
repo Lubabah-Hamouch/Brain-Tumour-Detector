@@ -23,6 +23,9 @@ class GradCam(BaseModel):
     heat_png: str = Field(description="Base64 PNG, RGBA, size x size: the heatmap on the web client's red ramp, "
                                       "transparent where attribution is weak; lay it over model_input_png")
     overlay_png: str = Field(description="Base64 PNG, RGB: the model input with the heatmap in a jet colormap")
+    contour: list[list[list[float]]] = Field(description="Outline where the heatmap reaches contour_level of its peak: "
+                                                         "polylines of [x, y] in model-input pixels")
+    contour_level: float = Field(description="Fraction of the peak the contour is drawn at")
     resolution_note: str = Field(description="Grad-CAM comes from a 12 x 12 feature map; treat it as coarse")
 
 

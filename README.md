@@ -68,9 +68,30 @@ T2 and CT images are poorly covered, and normal slices through the sella can be 
 
 ## The application
 
-Screenshots are not included because every screen shows patient images from the datasets, which
-are not redistributed here. Run the app locally to see it (instructions below). It has four
-screens:
+The screenshots below are of the running app. The patient images in them come from the held-out
+test sets: BraTS 2021 patient `BraTS2021_00003` and a test image from the Brain Tumor MRI Dataset,
+both cited under [Data and terms of use](#data-and-terms-of-use).
+
+![Overview screen](docs/screenshots/overview.png)
+<sub>Overview: a 3D render of held-out BraTS 2021 test patient BraTS2021_00003 with the ensemble's
+predicted tumour regions. It links to the live 3D view of the same patient.</sub>
+
+![Segment screen, axial view](docs/screenshots/segment.png)
+<sub>Segment: the ensemble's output for held-out BraTS 2021 test patient BraTS2021_00003 in the
+slice viewer, with region volumes and model agreement.</sub>
+
+![Segment screen, 3D view](docs/screenshots/segment-3d.png)
+<sub>Segment, 3D view: the same held-out test patient, with the brain as glass and the predicted
+tumour regions as surfaces.</sub>
+
+![Classify screen](docs/screenshots/classify.png)
+<sub>Classify: a held-out test image from the Brain Tumor MRI Dataset with the prediction, all four
+probabilities and the Grad-CAM heatmap with its half-peak outline.</sub>
+
+![Model card screen](docs/screenshots/model-card.png)
+<sub>Model card: specification and test results, read from the evaluation files.</sub>
+
+It has four screens:
 
 - **Overview.** The headline test results, read live from the evaluation outputs, with a 3D render
   of a held-out test patient's brain and predicted tumour. The render links to the live version:
@@ -88,7 +109,9 @@ screens:
   - Downloads: the label map (`.nii.gz`), a PNG of the slice on screen, and the 3D surfaces
     (`.glb`).
 - **Classify.** Upload a JPEG or PNG slice (or pick a test-set sample) and see the predicted type,
-  all four probabilities and a Grad-CAM heatmap. The result downloads as one PNG.
+  all four probabilities and a Grad-CAM heatmap with an outline at half its peak. For a "No tumour"
+  prediction the plain image is shown first, with a note that a highlighted region would not
+  indicate a lesion; the heatmap is one click away. The result downloads as one PNG.
 - **Model card.** The specification, both test tables with paired comparisons, the format stress
   test chart and the limitations. Every number comes from the evaluation files.
 
@@ -119,7 +142,9 @@ Next.js web client ──HTTP──▶ FastAPI service
   end to end on grayscale slices letterboxed to 384 × 384.
   - **Augmentation:** random crops, down-sampling and JPEG re-encoding, the shortcut fix described
     above.
-  - **Explanation:** Grad-CAM on the predicted class.
+  - **Explanation:** Grad-CAM on the predicted class, smoothed for display (a Gaussian of half a
+    feature-map cell) and outlined at half its peak. It comes from a 12 × 12 feature map, so it is
+    indicative, not a precise localisation.
 - **API** ([backend/README.md](backend/README.md)).
   - **Model loading:** the models load once at start-up.
   - **Classification:** answers synchronously in about a second.
@@ -141,6 +166,25 @@ Next.js web client ──HTTP──▶ FastAPI service
 
 ## Running it locally
 
+There are two ways to run the app:
+
+- **With Docker** ([below](#running-with-docker)): the quickest. You need Docker and the trained
+  weights, which one command downloads.
+- **From source** (this section): needed to retrain the models or rerun the evaluation.
+
+Either way, the app needs the trained weights. Download the published ones with
+
+```powershell
+python -m src.download_weights        # ~410 MB into models/; standard library only, no venv needed
+```
+
+or train your own with the steps below. The download checks each file's SHA-256 and never
+overwrites a checkpoint you trained yourself unless you pass `--force`. The weights are published
+as assets of the [`weights-v1` release](https://github.com/Lubabah-Hamouch/Brain-Tumour-Detector/releases/tag/weights-v1)
+for research use under the datasets' terms (see [Data and terms of use](#data-and-terms-of-use)).
+They are the served checkpoints with the optimizer state removed, and they load with
+`torch.load(..., weights_only=True)`.
+
 **Requirements:**
 
 - Python 3.12;
@@ -151,8 +195,9 @@ Next.js web client ──HTTP──▶ FastAPI service
 - about 25 GB of disk for the raw and preprocessed data, and about 38 GB at the peak, while the
   13 GB BraTS archive is being extracted.
 
-The trained weights are not distributed, so the steps below rebuild them from the public data. All
-commands run from the repository root. They are shown for PowerShell; in a POSIX shell use
+The steps below rebuild everything from the public data. To only run the app with the published
+weights, do step 1, download the weights, and skip to step 4. All commands run from the repository
+root. They are shown for PowerShell; in a POSIX shell use
 `source .venv/Scripts/activate` (Windows) or `source .venv/bin/activate`.
 
 **1. Environment**
@@ -220,21 +265,80 @@ python -m pytest tests
 
 The integration tests need the trained checkpoints and the local data, and are skipped without them.
 
+## Running with Docker
+
+`docker-compose.yml` runs the API and the web client as two containers. The images contain the
+code, the evaluation results and the split manifests only. Weights and data are never copied into
+them; they stay on your machine and are mounted read-only.
+
+**1. Get the weights** into `models/`, either the published ones or your own (see
+[above](#running-it-locally)):
+
+```powershell
+python -m src.download_weights
+```
+
+**2. Start the app** and open http://localhost:3000. The API is at http://localhost:8010/docs.
+
+```powershell
+docker compose up --build                                                    # CPU
+docker compose -f docker-compose.yml -f docker-compose.gpu.yml up --build    # NVIDIA GPU
+```
+
+- **CPU image** (about 2 GB): PyTorch's CPU build. Segmentation takes about 5–6 minutes per
+  study (measured on a 16-core laptop CPU under Docker Desktop, against about 3 minutes outside
+  Docker).
+- **GPU image** (about 9.7 GB, mostly PyTorch's CUDA 11.8 libraries): needs an NVIDIA GPU and the
+  [NVIDIA Container Toolkit](https://docs.nvidia.com/datacenter/cloud-native/container-toolkit/latest/install-guide.html)
+  (Docker Desktop on Windows includes GPU support through WSL 2). Segmentation takes seconds.
+- **Start-up:** the web client waits until the API reports healthy. Loading PyTorch and the six
+  models took between 20 seconds and 2.5 minutes in testing; the first start after building, and
+  the GPU image, are the slow cases.
+- **Port 3000** must be free. Stop a running `npm run dev` first, or change the web client's
+  port mapping and add the new origin to `BT_CORS_ORIGINS`.
+
+**Mounted folders:**
+
+| Host folder | In the container | Needed for |
+|---|---|---|
+| `models/` | `/app/models` | **Required.** `segmentation/fold1`…`fold5/best.pt` and `classification_crop_resdegrade_long/best.pt`. The API does not start without them. |
+| `data/` | `/app/data` | Optional. The "try a sample" buttons: BraTS case `data/raw/brats2021/BraTS2021_00003/` and the cleaned classification test set in `data/processed/`. Without them those buttons report that the sample is missing; your own uploads still work. |
+| `frontend/public/generated/` | `/app/public/generated` | Optional. The Overview's 3D render (`python -m src.visualization.render_hero`). Without it the Overview shows a note in its place. |
+
+**Settings:**
+
+- **Device:** `BT_DEVICE` is `auto` by default, which uses CUDA when the GPU image runs with a GPU
+  and the CPU otherwise. Set `BT_DEVICE=cpu` to force the CPU.
+- **API environment variables:** the `BT_*` variables in [backend/README.md](backend/README.md)
+  all work. Set them under `api.environment` in `docker-compose.yml`.
+- **API address for the browser:** the browser calls the API at `http://localhost:8010`, which is
+  fixed into the web client when its image is built. To serve the API elsewhere, change the
+  `NEXT_PUBLIC_API_URL` build argument and add the web client's origin to `BT_CORS_ORIGINS`.
+
 ## Data and terms of use
 
 - **BraTS 2021 Task 1** (RSNA-ASNR-MICCAI Brain Tumor Segmentation Challenge), obtained through
   the Kaggle mirror `dschettler8845/brats-2021-task1`. Use of the data is governed by the BraTS
-  challenge's terms. Work using it should cite:
+  challenge's terms. Data used in this project were obtained as part of the RSNA-ASNR-MICCAI Brain
+  Tumor Segmentation (BraTS) Challenge project through Synapse ID (syn25829067). Work using it
+  should cite:
   - U. Baid et al., "The RSNA-ASNR-MICCAI BraTS 2021 Benchmark on Brain Tumor Segmentation and
     Radiogenomic Classification", arXiv:2107.02314 (2021);
-  - B. H. Menze et al., IEEE Transactions on Medical Imaging 34(10), 2015;
-  - S. Bakas et al., Scientific Data 4, 170117 (2017).
-- **Brain Tumor MRI Dataset** (Kaggle `masoudnickparvar/brain-tumor-mri-dataset`). It combines the
-  Figshare release of Cheng et al., the SARTAJ dataset and Br35H. See the dataset page for its
-  terms and the original sources.
+  - B. H. Menze et al., "The Multimodal Brain Tumor Image Segmentation Benchmark (BRATS)", IEEE
+    Transactions on Medical Imaging 34(10), 1993–2024 (2015), doi:10.1109/TMI.2014.2377694;
+  - S. Bakas et al., "Advancing The Cancer Genome Atlas glioma MRI collections with expert
+    segmentation labels and radiomic features", Scientific Data 4, 170117 (2017),
+    doi:10.1038/sdata.2017.117.
+- **Brain Tumor MRI Dataset** (Kaggle `masoudnickparvar/brain-tumor-mri-dataset`, CC BY 4.0). It
+  combines the Figshare release of Cheng et al., the SARTAJ dataset and Br35H. See the dataset page
+  for the original sources.
 
-No images, volumes, patient-derived renders or model weights are committed. The repository holds
-the code, the split manifests and the evaluation results.
+**What is in this repository:** the code, the split manifests, the evaluation results and the
+screenshots in `docs/screenshots/`. The screenshots show the models' output on held-out test cases
+from these datasets. No dataset files (images or volumes) are committed.
+
+**What is published separately:** the trained weights, as release assets. They are shared for
+research use under the datasets' terms, with the citations above.
 
 ## License
 
@@ -242,17 +346,22 @@ The code in this repository is released under the [MIT License](LICENSE).
 
 The licence covers this repository's own contents only. It does not extend to the BraTS 2021 data
 or the Brain Tumor MRI Dataset, or to anything derived from them, such as preprocessed volumes,
-renders or weights trained on them. Those remain under each dataset's own terms, described above.
+renders, the screenshots or the weights trained on them. Those remain under each dataset's own
+terms, described above.
 
 ## Repository layout
 
 ```
 backend/     FastAPI service: models, async jobs, results and report endpoints   (backend/README.md)
 frontend/    Next.js web client: Overview, Segment, Classify, Model card          (frontend/README.md)
-src/         Data preparation, training, evaluation, error analysis, rendering
+src/         Data preparation, training, evaluation, error analysis, rendering, weight download
 configs/     Training and preprocessing settings, one file per reported model
 data/        Local datasets (gitignored) and the committed split manifests        (data/README.md)
 reports/     final_results.md and machine-readable results in reports/results/
-tests/       API and job-queue tests
-models/      Trained checkpoints (gitignored)
+tests/       Tests for the API, job queue, models, losses, preprocessing and training setup
+models/      Trained checkpoints (gitignored; python -m src.download_weights)
+docs/        Screenshots for this README
+
+docker-compose.yml, docker-compose.gpu.yml   Docker setup (backend/Dockerfile, frontend/Dockerfile)
+requirements*.txt                            Python dependencies: core, API, hero render
 ```

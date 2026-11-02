@@ -1,0 +1,48 @@
+# API and web client. Weights and data stay on the host and are mounted read-only.
+#   docker compose up --build                                                  # CPU
+#   docker compose -f docker-compose.yml -f docker-compose.gpu.yml up --build   # NVIDIA GPU
+# Then open http://localhost:3000. See "Running with Docker" in README.md.
+services:
+  api:
+    build:
+      context: .
+      dockerfile: backend/Dockerfile
+      args:
+        TORCH_VARIANT: cpu
+    image: brain-tumour-api:cpu
+    # A minimal init as PID 1 forwards stop signals and reaps child processes, so the container
+    # always stops cleanly.
+    init: true
+    ports:
+      - "8010:8010"
+    environment:
+      BT_DEVICE: ${BT_DEVICE:-auto}
+      # The browser calls the API directly from the web client's origin.
+      BT_CORS_ORIGINS: http://localhost:3000,http://127.0.0.1:3000
+    volumes:
+      # Required: models/segmentation/fold1..5/best.pt and
+      # models/classification_crop_resdegrade_long/best.pt (python -m src.download_weights).
+      - ./models:/app/models:ro
+      # Optional: the sample study and sample images (data/raw/brats2021/BraTS2021_00003 and
+      # data/processed/figshare_classification_4class_clean/test). Without them the "try a sample"
+      # buttons report that the sample is missing; uploads still work.
+      - ./data:/app/data:ro
+
+  web:
+    build:
+      context: frontend
+      args:
+        NEXT_PUBLIC_API_URL: http://localhost:8010
+    image: brain-tumour-web
+    init: true
+    ports:
+      - "3000:3000"
+    environment:
+      # Server-side requests go over the compose network.
+      API_URL: http://api:8010
+    volumes:
+      # Optional: the Overview's 3D render (python -m src.visualization.render_hero).
+      - ./frontend/public/generated:/app/public/generated:ro
+    depends_on:
+      api:
+        condition: service_healthy

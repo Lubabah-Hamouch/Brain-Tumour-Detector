@@ -9,6 +9,8 @@
 
 html {
   -webkit-text-size-adjust: 100%;
+  /* Tap feedback on touch screens in the interface's grey, not the browser's blue. */
+  -webkit-tap-highlight-color: rgba(236, 237, 239, 0.12);
 }
 
 body {

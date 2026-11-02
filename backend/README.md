@@ -36,6 +36,20 @@ uvicorn backend.main:app --port 8010
   (sliding-window batch of 2, mixed precision).
 - **Port:** any free port works. 8010 is used here because 8000 is often taken by local Docker
   services.
+- **Weights:** `python -m src.download_weights` puts the published checkpoints where the defaults
+  below expect them, or train your own (root README).
+
+**Docker:** `backend/Dockerfile` builds this service from the repository root. The `TORCH_VARIANT`
+build argument selects the PyTorch build: `cpu` (default) or a CUDA build such as `cu118`. The
+image holds the code, `reports/results/`, `reports/final_results.md` and `data/manifests/`, so the
+results and model card endpoints work. Weights and data are mounted at `/app/models` and
+`/app/data`. `docker-compose.yml` at the root wires this up with the web client; see "Running with
+Docker" in the root README.
+
+```bash
+docker build -f backend/Dockerfile -t brain-tumour-api .
+docker run --rm -p 8010:8010 -v "$PWD/models:/app/models:ro" -v "$PWD/data:/app/data:ro" brain-tumour-api
+```
 
 Settings come from environment variables:
 
@@ -87,7 +101,8 @@ ImageNet-normalised. This is exactly what validation and test images received.
   "image": {"width": 512, "height": 512, "mode": "L", "grayscale": true},
   "letterbox": {"size": 384, "scale": 0.75, "offset_x": 0, "offset_y": 0, "resized_width": 384, "resized_height": 384},
   "model_input_png": "<base64>",
-  "gradcam": {"target_class": "pituitary", "heatmap_png": "<base64>", "heat_png": "<base64>", "overlay_png": "<base64>", "resolution_note": "..."},
+  "gradcam": {"target_class": "pituitary", "heatmap_png": "<base64>", "heat_png": "<base64>", "overlay_png": "<base64>",
+              "contour": [[[201.5, 140.0], [188.2, 151.0], "..."]], "contour_level": 0.5, "resolution_note": "..."},
   "model": {"checkpoint": "models/classification_crop_resdegrade_long/best.pt", "checkpoint_epoch": 22, "validation": {}},
   "warnings": []
 }
@@ -100,9 +115,17 @@ ImageNet-normalised. This is exactly what validation and test images received.
     attribution is weak. Lay it over `model_input_png`; the web client does this with an opacity
     slider.
   - `overlay_png` is a ready-made blend with the jet colormap, as in the error-inspection figures.
+- **Outline:** `contour` is where the heatmap reaches `contour_level` (half) of its peak, as closed
+  polylines of `[x, y]` in model-input pixels. The web client draws it as a vector line over the
+  heatmap, so the region of interest reads clearly at any size.
 - **Mapping back to the original image:** use the `letterbox` fields. A heatmap pixel (u, v)
   corresponds to original-image pixel ((u − offset_x) / scale, (v − offset_y) / scale).
-- **Resolution:** the heatmap comes from a 12 × 12 feature map, so it is coarse.
+- **Resolution:** the heatmap comes from a 12 × 12 feature map, so it is coarse. For display it is
+  smoothed with a Gaussian of half a feature-map cell (16 px). That removes the cross-shaped ridges
+  that bilinear upsampling leaves along the cell edges; it adds no detail the map does not have.
+- **"No tumour" predictions:** the heatmap still shows what the model looked at to decide, which
+  is not a lesion. The web client starts on the plain image for these and says so, and the report
+  leaves the heatmap out.
 
 **Scope:** the model was trained on single 2D slices, mostly contrast-enhanced T1. T2, FLAIR and CT
 images are poorly covered (see `reports/final_results.md`).
@@ -110,8 +133,9 @@ images are poorly covered (see `reports/final_results.md`).
 ## `GET /api/classify/{result_id}/report.png`
 
 One PNG of a classification result, for saving or sharing: the file name and size, the model input
-with the Grad-CAM overlay, the prediction with its probability, all four probabilities as bars, and
-the model, export date and research-use notice.
+with the Grad-CAM overlay and its half-peak outline, the prediction with its probability, all four
+probabilities as bars, and the model, export date and research-use notice. For a "no tumour"
+prediction the image is shown without the heatmap, and the footer says why.
 
 - **Size:** 2400 × 3000 (a 1200 × 1500 layout at 2×), about 0.8 MB.
 - **Rendered on the server** with Pillow when first requested, then kept with the result. It uses the

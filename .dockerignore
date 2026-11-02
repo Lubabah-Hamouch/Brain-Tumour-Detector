@@ -1,0 +1,12 @@
+# Build context for backend/Dockerfile. The image gets code, the evaluation results and the split
+# manifests only: datasets, weights and credentials are mounted or kept out (see README, "Docker").
+*
+!backend/
+!src/
+!requirements.txt
+!requirements-backend.txt
+!reports/final_results.md
+!reports/results/
+!data/manifests/
+**/__pycache__/
+**/*.py[cod]
