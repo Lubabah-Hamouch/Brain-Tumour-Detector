@@ -50,9 +50,13 @@ export type ClassificationResult = {
     target_class: string;
     /** Base64 PNG, RGBA: Grad-CAM on the red ramp, aligned with model_input_png. */
     heat_png: string;
-    /** Outline where the heatmap reaches `contour_level` of its peak: polylines of [x, y] in model-input pixels. */
-    contour: [number, number][][];
-    contour_level: number;
+    /**
+     * Outline where the heatmap reaches `contour_level` of its peak: polylines of [x, y] in
+     * model-input pixels; empty when there is nothing to outline. Optional because an API started
+     * before the outline was added does not send it.
+     */
+    contour?: [number, number][][];
+    contour_level?: number;
     resolution_note: string;
   };
   model: { checkpoint: string; checkpoint_epoch: number };

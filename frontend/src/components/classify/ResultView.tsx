@@ -44,9 +44,12 @@ function runnerUpNote(result: ClassificationResult, summary: ResultsSummary | nu
   return `${sentence} ${label(pair.classes[0])} and ${label(pair.classes[1]).toLowerCase()} account for ${pair.errors} of the ${clf.test_errors} test-set errors${rank}.`;
 }
 
-/** The Grad-CAM outline as one SVG path in model-input pixels. */
-const contourPath = (lines: [number, number][][]) =>
-  lines.map((line) => `M${line.map(([x, y]) => `${x} ${y}`).join("L")}Z`).join("");
+/** The Grad-CAM outline as one SVG path in model-input pixels; "" when there is none. */
+const contourPath = (lines: [number, number][][] | undefined) =>
+  (lines ?? [])
+    .filter((line) => line.length > 1)
+    .map((line) => `M${line.map(([x, y]) => `${x} ${y}`).join("L")}Z`)
+    .join("");
 
 export function ResultView({ result, selected, summary, samples, running, onFile, onSample, onReset }: Props) {
   // For "no tumour" the heatmap marks what the model looked at to decide, which a visitor would read
@@ -63,6 +66,7 @@ export function ResultView({ result, selected, summary, samples, running, onFile
   const baseOpacity = mode === "Heatmap" ? 0.15 : 1;
   const heatOpacity = mode === "Input" ? 0 : opacity / 100;
   const predicted = label(result.predicted_class);
+  const outline = contourPath(result.gradcam.contour);
 
   return (
     <div className={styles.screen} aria-busy={running}>
@@ -106,14 +110,16 @@ export function ResultView({ result, selected, summary, samples, running, onFile
               unoptimized
               style={{ opacity: heatOpacity }}
             />
-            <svg
-              className={`${styles.layer} ${styles.contour}`}
-              viewBox={`0 0 ${size} ${size}`}
-              aria-hidden="true"
-              style={{ opacity: heatOpacity }}
-            >
-              <path d={contourPath(result.gradcam.contour)} stroke={regionColor.ET} />
-            </svg>
+            {outline && (
+              <svg
+                className={`${styles.layer} ${styles.contour}`}
+                viewBox={`0 0 ${size} ${size}`}
+                aria-hidden="true"
+                style={{ opacity: heatOpacity }}
+              >
+                <path d={outline} stroke={regionColor.ET} />
+              </svg>
+            )}
           </div>
         </div>
 

@@ -92,6 +92,26 @@ def test_classify_response_shape(client):
     assert min(xs) <= px <= max(xs) and min(ys) <= py <= max(ys)
 
 
+def test_classify_contour_present_for_every_outcome(client):
+    """Every prediction, "no tumour" included, carries the outline as a list of closed polylines."""
+    predicted = set()
+    for cls in CLASSES:
+        body = upload_image(client, sorted((CLEAN_DIR / "test" / cls).glob("*.jpg"))[0]).json()
+        predicted.add(body["predicted_class"])
+        contour = body["gradcam"]["contour"]
+        assert isinstance(contour, list) and contour, body["predicted_class"]
+        assert all(len(line) >= 3 and all(len(p) == 2 for p in line) for line in contour)
+    assert "notumor" in predicted
+
+
+def test_cam_contour_empty_for_blank_heatmap():
+    """A heatmap with nothing in it gives an empty outline, not an error or a missing field."""
+    from backend.services.imaging import cam_contour, smooth_cam
+
+    cam = smooth_cam(np.zeros((384, 384), dtype=np.float32))
+    assert np.isfinite(cam).all() and cam_contour(cam) == []
+
+
 def test_classify_report_omits_heatmap_for_no_tumour(client):
     """A no-tumour report shows the plain slice: no Grad-CAM reds in the image panel."""
     images = sorted((CLEAN_DIR / "test" / "notumor").glob("*.jpg"))[:5]
