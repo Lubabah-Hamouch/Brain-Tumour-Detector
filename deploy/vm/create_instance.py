@@ -2,16 +2,18 @@
 
 Creating a VM.Standard.A1.Flex instance often fails with "Out of host capacity" in busy regions.
 Capacity comes and goes, so this script tries the launch again every 60-90 seconds until it
-succeeds, and prints the instance's details and public IP when it does. DEPLOYMENT.md (section 2,
-"Option A") explains how to set up the OCI CLI and find the values it needs.
+succeeds, prints the instance's details and public IP when it does, and saves the IP in
+deploy/vm/instance.env as INSTANCE_IP for setup_remote.py. DEPLOYMENT.md (sections 2-4) explains
+how to set up the OCI CLI; create_network.py fills in the settings this script needs.
 
 It only ever asks for an Always Free shape: 2 OCPUs and 12 GB, or, with your agreement,
 1 OCPU and 6 GB (--fallback-after, --small). It stops before launching if the compartment already
 has an A1 instance, so it cannot create a second one beside it, and it stops on any error other
 than capacity, rate limiting or a temporary server error, instead of retrying it.
 
-The settings come from deploy/vm/instance.env (copy instance.env.example; it is gitignored) or
-from environment variables of the same names, which take precedence:
+The settings come from deploy/vm/instance.env (written by create_network.py, or copied from
+instance.env.example; it is gitignored) or from environment variables of the same names, which
+take precedence:
 
     OCI_COMPARTMENT_ID        where the instance goes (the tenancy OCID for the root compartment)
     OCI_SUBNET_ID             the public subnet of your VCN
@@ -33,15 +35,11 @@ import argparse
 import json
 import os
 import random
-import shutil
-import subprocess
 import sys
 import time
-from datetime import datetime
 from pathlib import Path
 
-HERE = Path(__file__).resolve().parent
-DEFAULT_CONFIG = HERE / "instance.env"
+from common import SETTINGS_FILE, OciError, fail, log, oci, read_settings, write_settings
 
 SHAPE = "VM.Standard.A1.Flex"
 FULL = {"ocpus": 2, "memoryInGBs": 12}   # the whole Always Free Ampere allowance
@@ -50,77 +48,18 @@ MIN_INTERVAL = 60                        # never retry faster than this, in seco
 MAX_BACKOFF = 300                        # longest wait after rate limiting
 
 
-class LaunchError(Exception):
-    """An OCI CLI call failed. kind: capacity, rate_limit, transient or fatal."""
-
-    def __init__(self, kind, message):
-        super().__init__(message)
-        self.kind = kind
-
-
-def log(message):
-    print(f"[{datetime.now():%Y-%m-%d %H:%M:%S}] {message}", flush=True)
-
-
-def fail(message):
-    sys.exit(f"Error: {message}")
-
-
-def read_settings(path):
-    """KEY=value lines from the config file, overridden by environment variables."""
-    settings = {}
-    if path.exists():
-        for line in path.read_text(encoding="utf-8").splitlines():
-            line = line.strip()
-            if line and not line.startswith("#") and "=" in line:
-                key, value = line.split("=", 1)
-                settings[key.strip()] = value.strip().strip('"').strip("'")
-    keys = ["OCI_COMPARTMENT_ID", "OCI_SUBNET_ID", "SSH_PUBLIC_KEY_FILE", "OCI_IMAGE_ID",
-            "OCI_AVAILABILITY_DOMAINS", "INSTANCE_NAME"]
-    for key in keys:
-        if os.environ.get(key):
-            settings[key] = os.environ[key].strip()
-    return settings
-
-
-def classify(stderr):
-    """Sort a failed CLI call into what to do next, from the ServiceError it prints."""
-    status, code, message = None, "", stderr.strip()
-    start = stderr.find("{")
-    if start != -1:
-        try:
-            error = json.loads(stderr[start:])
-            status, code = error.get("status"), str(error.get("code", ""))
-            message = str(error.get("message", message))
-        except ValueError:
-            pass
-    text = f"{code} {message}".lower()
-    if "out of host capacity" in text or "out of capacity" in text:
-        return LaunchError("capacity", message)
-    if status == 429 or "toomanyrequests" in text:
-        return LaunchError("rate_limit", message)
-    if status in (502, 503, 504) or "timed out" in text or "connection" in text:
-        return LaunchError("transient", message)
-    return LaunchError("fatal", stderr.strip() or "the OCI CLI failed without a message")
-
-
-def oci(*args):
-    """Run the OCI CLI and return its JSON output (None if it printed nothing)."""
-    exe = shutil.which("oci")
-    if exe is None:
-        fail("the OCI CLI (`oci`) is not on PATH; DEPLOYMENT.md, section 2, explains how to install it.")
-    result = subprocess.run([exe, *args], capture_output=True, text=True, encoding="utf-8")
-    if result.returncode != 0:
-        raise classify(result.stderr)
-    return json.loads(result.stdout) if result.stdout.strip() else None
-
-
 def need(settings, key):
-    value = settings.get(key, "")
-    if not value or "..." in value:
-        fail(f"{key} is not set. Set it in {DEFAULT_CONFIG.name} (see instance.env.example) "
-             "or as an environment variable.")
-    return value
+    if key not in settings:
+        fail(f"{key} is not set. Run create_network.py, which writes it to {SETTINGS_FILE.name}, "
+             "or set it there (see instance.env.example) or as an environment variable.")
+    return settings[key]
+
+
+def save_ip(path, ip):
+    """Remember the IP for setup_remote.py, in the settings file if one is in use."""
+    if ip and path.exists():
+        write_settings({"INSTANCE_IP": ip}, path)
+        log(f"Saved INSTANCE_IP={ip} in {path.name}.")
 
 
 def ssh_key_file(settings):
@@ -166,7 +105,7 @@ def wait_until_running(instance_id):
     while True:
         try:
             instance = oci("compute", "instance", "get", "--instance-id", instance_id)["data"]
-        except LaunchError as error:
+        except OciError as error:
             if error.kind == "fatal":
                 fail(f"could not check the new instance {instance_id}:\n{error}\n"
                      "Look it up in the console (Compute > Instances).")
@@ -203,8 +142,8 @@ def ask(question):
 def main():
     parser = argparse.ArgumentParser(
         description="Create the Always Free Ampere VM, retrying while the region is out of capacity.")
-    parser.add_argument("--config", type=Path, default=DEFAULT_CONFIG,
-                        help=f"settings file (default: deploy/vm/{DEFAULT_CONFIG.name})")
+    parser.add_argument("--config", type=Path, default=SETTINGS_FILE,
+                        help=f"settings file (default: deploy/vm/{SETTINGS_FILE.name})")
     parser.add_argument("--interval", type=int, default=75,
                         help=f"average seconds between attempts, at least {MIN_INTERVAL} (default 75; "
                              "each wait varies by up to 15 s either way)")
@@ -234,8 +173,12 @@ def main():
         if existing:
             print("This compartment already has an Ampere A1 instance, so none is created:")
             for instance in existing:
+                ip = public_ip(instance)
                 print("  " + describe(instance))
-            print("Use it (DEPLOYMENT.md, step 2.3), or terminate it first if it is not wanted.")
+                print(f"  Public IP: {ip or 'none'}")
+                if instance["display-name"] == name and not args.dry_run:
+                    save_ip(args.config, ip)
+            print("Use it (DEPLOYMENT.md, section 5 onwards), or terminate it first if it is not wanted.")
             return 0
 
         if settings.get("OCI_IMAGE_ID"):
@@ -246,7 +189,7 @@ def main():
         if not domains:
             listed = oci("iam", "availability-domain", "list", "--compartment-id", compartment)
             domains = [d["name"] for d in listed["data"]]
-    except LaunchError as error:
+    except OciError as error:
         fail(f"the OCI CLI could not read your account:\n{error}\n"
              "Check ~/.oci/config with `oci iam region list` (DEPLOYMENT.md, section 2).")
 
@@ -285,9 +228,9 @@ def main():
                 instance = wait_until_running(launched["id"])
                 if instance is None:
                     log("  the instance was terminated while provisioning (capacity); trying again")
-                    raise LaunchError("capacity", "terminated while provisioning")
+                    raise OciError("capacity", "terminated while provisioning")
                 break
-            except LaunchError as error:
+            except OciError as error:
                 if error.kind == "fatal":
                     log("  failed with an error that retrying will not fix:")
                     print(str(error), file=sys.stderr)
@@ -331,8 +274,9 @@ def main():
     print("  " + describe(instance))
     print(f"  Public IP: {ip or 'none (check that the subnet is public)'}")
     if ip:
-        print(f"\nConnect with:  ssh -i ~/.ssh/oracle_vm ubuntu@{ip}")
-    print("Continue with DEPLOYMENT.md, step 2.3 (note the IP), then section 3.")
+        print(f"\nConnect with:  ssh -i {key_file.with_suffix('')} ubuntu@{ip}")
+        save_ip(args.config, ip)
+    print("Continue with DEPLOYMENT.md, section 5 (point the DuckDNS name at this IP).")
     return 0
 
 

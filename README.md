@@ -344,6 +344,10 @@ CPU, always on), behind Caddy for automatic HTTPS, and the web client on Vercel.
   (`deploy/vm/`: the API and Caddy), the five sample images and the sample results computed in
   advance. The sample patient's raw BraTS volumes are never deployed or served there; only results
   derived from them are.
+- **Scripts:** the Oracle side is scripted in `deploy/vm/`, run from your machine with the OCI CLI
+  and SSH: `create_network.py` (network, firewall rules, SSH key), `create_instance.py` (retries
+  through "out of capacity"), `setup_remote.py` (Docker, firewall, bundle, start) and
+  `update_origin.py` (allow the Vercel site). Only DuckDNS and Vercel are set up in the browser.
 - **Weights:** the container downloads them from the release on its first start.
 - **Connecting the two:** Vercel's `NEXT_PUBLIC_API_URL` points the site at the service, and the
   service's `ALLOWED_ORIGIN` allows the site to call it.
