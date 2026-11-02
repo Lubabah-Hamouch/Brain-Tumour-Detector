@@ -5,7 +5,7 @@ FastAPI service for the two trained models:
 - **`POST /api/classify`**: tumour type from one 2D MRI image, with a Grad-CAM heatmap. The model
   is the primary classifier in `reports/final_results.md`. Each result can be downloaded as one
   PNG from **`GET /api/classify/{result_id}/report.png`**.
-- **`GET /api/samples`**: three held-out test images for trying the classifier without a scan.
+- **`GET /api/samples`**: four held-out test images for trying the classifier without a scan.
 - **`POST /api/segment`**: 3D tumour segmentation (WT/TC/ET) from the four BraTS MRI sequences.
   The model is the 5-fold U-Net ensemble with enhancing-tumour post-processing. It runs as a
   background job, polled with **`GET /api/jobs/{job_id}`**. Each result has viewer slices
@@ -146,12 +146,13 @@ prediction the image is shown without the heatmap, and the footer says why.
 
 ## `GET /api/samples`
 
-Three held-out test images, so the classifier can be tried without a scan of one's own:
-`Tr-me_1065.jpg` (meningioma), `Te-pi_102.jpg` (pituitary) and `Te-gl_350.jpg` (glioma, one of the
-recorded test errors). Each entry gives the true class, the size, whether the served classifier gets
+Four held-out test images, so the classifier can be tried without a scan of one's own:
+`Tr-me_1065.jpg` (meningioma), `Te-pi_102.jpg` (pituitary), `Te-gl_12.jpg` (glioma) and
+`Te-gl_350.jpg` (glioma, one of the recorded test errors: called meningioma). The correct glioma is
+listed before the error, so the failure can be compared with a normal result of the same class. Each entry gives the true class, the size, whether the served classifier gets
 it wrong on the test set (`known_error`, from the test report) and a `url`.
 
-`GET /api/samples/{name}` returns the image. Only these three files are served, read from the local
+`GET /api/samples/{name}` returns the image. Only these four files are served, read from the local
 cleaned test set (`data/processed/`); any other name answers `404 sample_not_found`. The images are
 never committed to the repository.
 

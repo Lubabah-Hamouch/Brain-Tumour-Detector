@@ -141,7 +141,7 @@ def test_classify_report_unknown_is_404(client):
 
 def test_samples_are_listed_and_served(client):
     samples = client.get("/api/samples").json()
-    assert [s["name"] for s in samples] == ["Tr-me_1065.jpg", "Te-pi_102.jpg", "Te-gl_350.jpg"]
+    assert [s["name"] for s in samples] == ["Tr-me_1065.jpg", "Te-pi_102.jpg", "Te-gl_12.jpg", "Te-gl_350.jpg"]
     recorded = json.loads((RESULTS / "classification_test_crop_resdegrade_long.json").read_text())
     errors = {e["file"] for e in recorded["misclassified"]}
     for s in samples:

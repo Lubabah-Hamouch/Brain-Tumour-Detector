@@ -13,8 +13,9 @@ from src.data.classification_preprocess import CLEAN_DIR, IMAGE_SUFFIXES
 router = APIRouter(prefix="/api", tags=["classification"])
 
 # Held-out test images offered to visitors without a scan of their own: a correctly classified
-# meningioma and pituitary, and one of the recorded test errors.
-SAMPLES = ("Tr-me_1065.jpg", "Te-pi_102.jpg", "Te-gl_350.jpg")
+# meningioma, pituitary and glioma, then one of the recorded test errors, a second glioma, so the
+# failure case can be compared with a correct result of the same class.
+SAMPLES = ("Tr-me_1065.jpg", "Te-pi_102.jpg", "Te-gl_12.jpg", "Te-gl_350.jpg")
 
 ERRORS = {413: {"model": ErrorResponse}, 415: {"model": ErrorResponse}, 422: {"model": ErrorResponse},
           503: {"model": ErrorResponse}}

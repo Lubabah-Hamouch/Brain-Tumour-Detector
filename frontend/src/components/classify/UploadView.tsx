@@ -65,7 +65,7 @@ export function UploadView(props: Props) {
               Classify an image from the test set
             </h2>
             <p className="caption">
-              One click runs the model. These images were never used in training; the glioma is a{" "}
+              One click runs the model. These images were never used in training; the second glioma is a{" "}
               <Term k="knownError">known error</Term>.
             </p>
           </div>
