@@ -1,142 +1,335 @@
-# Deployment: Hugging Face Space (API) and Vercel (web client)
+# Deployment: Oracle Cloud VM (API) and Vercel (web client)
 
-This deploys the app on free tiers:
+This deploys the app for free:
 
-- **API:** a Docker Space on Hugging Face, on the free CPU hardware (2 vCPU, 16 GB RAM). It
-  builds `backend/Dockerfile`.
+- **API:** Docker on an Oracle Cloud "Always Free" virtual machine (Ampere A1, Ubuntu). Two
+  containers run there: the API, and [Caddy](https://caddyserver.com) in front of it, which
+  serves HTTPS with a free Let's Encrypt certificate that it obtains and renews by itself.
+- **Domain:** a free [DuckDNS](https://www.duckdns.org) subdomain, e.g.
+  `brain-tumour-api.duckdns.org`, pointing at the VM. Let's Encrypt needs a name, not a bare IP.
 - **Web client:** a Vercel project that builds `frontend/`.
 
-The browser loads the site from Vercel and calls the API on the Space directly. Two settings
+The browser loads the site from Vercel and calls the API on the VM directly. Two settings
 connect them:
 
 | Where | Setting | Value |
 |---|---|---|
-| Vercel project | `NEXT_PUBLIC_API_URL` | the Space's URL, e.g. `https://your-name-brain-tumour-api.hf.space` |
-| Hugging Face Space | `ALLOWED_ORIGIN` | the Vercel site's URL, e.g. `https://brain-tumour-detector.vercel.app` |
+| Vercel project | `NEXT_PUBLIC_API_URL` | the API's URL, e.g. `https://brain-tumour-api.duckdns.org` |
+| `.env` on the VM | `ALLOWED_ORIGIN` | the Vercel site's URL, e.g. `https://brain-tumour-detector.vercel.app` |
 
-Do the steps in this order: the Space first, because Vercel needs its URL, then Vercel, then go
-back to the Space to allow the Vercel URL.
+Do the steps in this order: the VM first (sections 1–7), because Vercel needs its URL, then
+Vercel (8), then back to the VM to allow the Vercel URL (9).
 
-Tokens and keys stay on your machine. You type them into the Hugging Face CLI login and the two
-websites, never into a file in this repository.
+Credentials stay with you. You sign in to Oracle, DuckDNS and Vercel in the browser, and the SSH
+key you create stays on your machine. Nothing secret goes into this repository.
 
 ## What you need
 
-- A [Hugging Face](https://huggingface.co/join) account and a [Vercel](https://vercel.com/signup)
-  account. For Vercel, sign up with GitHub, so it can see the repository.
-- This repository pushed to GitHub, with the changes you want deployed on `main`.
+- An email address and a payment card for the Oracle Cloud sign-up (section 1). Oracle uses the
+  card to verify your identity. An Always Free account is not charged.
+- A [Vercel](https://vercel.com/signup) account. Sign up with GitHub, so it can see the
+  repository.
+- A DuckDNS account (sign in with GitHub, Google or another listed provider; nothing to install).
+- This repository pushed to GitHub, with the changes you want deployed on `main` (for Vercel).
 - On your machine: the project's Python environment (`.venv`) with the sample data in `data/`,
   i.e. what the "try a sample" buttons use locally:
   - `data/raw/brats2021/BraTS2021_00003/`. The bundle script computes the sample study's result
-    from it; the files themselves are never uploaded;
+    from it; the files themselves never leave your machine;
   - the cleaned classification test set in `data/processed/figshare_classification_4class_clean/test/`.
 - Optional: the Overview's 3D render, `frontend/public/generated/hero-3d.png`
   (`python -m src.visualization.render_hero`).
+- `ssh` and `scp`. Both come with Windows 10 and 11 (OpenSSH); the commands below are for
+  PowerShell.
 
 ## Before you start: what becomes public
 
-A free Space has to be **public**, because the browser calls it without a token. Everything
-uploaded to it can be browsed and downloaded by anyone at `huggingface.co/spaces/<you>/<space>`:
+The API is public: the browser calls it without credentials. Anyone can call its endpoints,
+which serve:
 
-- the code;
 - the five sample images from the Brain Tumor MRI Dataset (CC BY 4.0, which allows
-  redistribution with attribution; the Space's card gives it);
+  redistribution with attribution; the README gives it);
 - the pre-computed sample results, and the hero render if you have one.
 
-**No raw BraTS volumes.** The BraTS terms do not allow redistributing them, so neither the Space
-nor its API offers the sample patient's NIfTI files:
+**No raw BraTS volumes.** The BraTS terms do not allow redistributing them, so the VM never has
+or serves the sample patient's NIfTI files:
 
-- the bundle does not contain them, and the bundle script stops if any NIfTI file ends up in it;
-- the Space's API has no `/api/sample-study` or `/api/sample-study/{name}` endpoint;
+- the bundle you copy to the VM does not contain them, and the bundle script stops if any NIfTI
+  file ends up in it;
+- the API has no `/api/sample-study` or `/api/sample-study/{name}` endpoint there;
 - the sample button asks for the pre-computed result and downloads nothing else.
 
-What the Space does publish of that patient is derived from the volumes: the predicted label map,
+What the API does publish of that patient is derived from the volumes: the predicted label map,
 the viewer's slice images (one cropped slice per plane and sequence), the 3D surfaces, the
 volumes and the hero render.
 
-The weights are not uploaded. The Space downloads them from the `weights-v1` GitHub release when
-it starts.
+The weights are not copied to the VM either. The API container downloads them from the
+`weights-v1` GitHub release on its first start.
 
-## 1. Create the Hugging Face Space (the API)
+Only ports 80 and 443 (Caddy) and 22 (SSH) are open to the internet. The API's own port is
+reachable only by Caddy, inside Docker.
 
-**1.1 Get a write token.**
+## 1. Create the Oracle Cloud account
 
-1. On huggingface.co, click your avatar (top right), then **Settings**, then **Access Tokens**.
-2. Click **Create new token**, choose the **Write** type and give it a name, e.g. `space-upload`.
-3. Copy the token. You paste it once in step 1.3.
+1. Go to https://signup.cloud.oracle.com and sign up for a **Free Tier** account.
+2. **Home region:** choose it carefully, because it cannot be changed later and Always Free
+   resources live only there. Pick one near you and your visitors (e.g. Germany Central
+   (Frankfurt), UK South (London), US East (Ashburn)). Busy regions sometimes run out of free
+   Ampere capacity (see "Out of capacity" in [When something is wrong](#when-something-is-wrong)).
+3. Enter the card. Oracle may place a small temporary authorisation on it to verify it, which is
+   released again. The account stays free: Always Free resources are never charged, and a Free
+   Tier account cannot create anything that is not.
+4. Wait for the "Your account is ready" email (minutes, sometimes longer), then sign in at
+   https://cloud.oracle.com.
 
-**1.2 Create the Space.**
+## 2. Create the VM
 
-1. Go to https://huggingface.co/new-space.
-2. Fill in the form:
-   - **Owner:** your user name. **Space name:** e.g. `brain-tumour-api`.
-   - **License:** anything. The card uploaded in step 1.5 replaces it.
-   - **Select the Space SDK:** **Docker**, then the **Blank** template.
-   - **Space hardware:** **CPU basic · 2 vCPU · 16 GB · FREE**.
-   - **Visibility:** **Public**.
-3. Click **Create Space**.
-4. Note the Space's address. The API's URL is `https://<owner>-<space-name>.hf.space`,
-   lower-case, e.g. `https://your-name-brain-tumour-api.hf.space`. It is also shown in the
-   Space's **⋮** menu, under **Embed this Space**, as "Direct URL".
+**2.1 Make an SSH key** on your machine (once). In PowerShell:
 
-**1.3 Log in from your machine** (once per machine):
+```powershell
+ssh-keygen -t ed25519 -f $HOME\.ssh\oracle_vm
+```
+
+Press Enter twice for no passphrase, or set one. This creates `oracle_vm` (the private key: stays
+on your machine, never share it) and `oracle_vm.pub` (the public key, which goes to Oracle). Show
+the public key, to copy it in the next step:
+
+```powershell
+Get-Content $HOME\.ssh\oracle_vm.pub
+```
+
+Using your own key avoids the Windows file-permission errors that the key Oracle can generate for
+you often causes.
+
+**2.2 Create the instance.** In the console menu (☰): **Compute**, then **Instances**, then
+**Create instance**.
+
+1. **Name:** e.g. `brain-tumour-api`.
+2. **Image and shape**, click **Edit**:
+   - **Image:** click **Change image**, choose **Ubuntu**, then **Canonical Ubuntu 24.04** (the
+     plain one, not "Minimal"). Make sure the build is **aarch64** (it is listed for Ampere).
+   - **Shape:** click **Change shape**, choose **Ampere**, then **VM.Standard.A1.Flex**.
+     Set **Number of OCPUs: 2** and **Amount of memory (GB): 12**. It shows the "Always Free
+     eligible" label.
+
+   2 OCPUs and 12 GB is the whole Always Free Ampere allowance (1,500 OCPU hours and 9,000 GB
+   hours a month, i.e. 2 OCPUs and 12 GB running all month). It is plenty for this app: see
+   [Sizing](#sizing). One Ampere OCPU is one full core, so this is 2 cores.
+3. **Networking:** keep **Create new virtual cloud network** and **Create new public subnet**.
+   Make sure **Assign a public IPv4 address** is on.
+4. **Add SSH keys:** choose **Paste public keys** and paste the line from 2.1
+   (`ssh-ed25519 AAAA… `).
+5. **Boot volume:** leave the default (about 50 GB). It counts towards the 200 GB of Always Free
+   block storage; the app needs about 10 GB of it.
+6. Click **Create**. After a minute or two the state changes to **Running**.
+
+**2.3 Note the public IP.** On the instance's page, under **Instance access**, copy the **Public
+IP address**, e.g. `141.147.12.34`. The commands below write it as `<IP>`.
+
+This address stays the instance's for its whole life, including stop and start; only
+terminating the instance releases it.
+
+## 3. Open ports 80 and 443 in Oracle's network
+
+Oracle filters traffic **before** it reaches the VM, in the virtual network's security list.
+Only SSH (22) is allowed by default. Caddy needs 80 (for Let's Encrypt and the redirect to
+HTTPS) and 443 (HTTPS). This is separate from the firewall inside the VM (step 5.3), and both
+must allow the ports.
+
+1. On the instance's page, under **Primary VNIC**, click the **Subnet** link
+   (`subnet-…`).
+2. Open **Security** (or **Security Lists**) and click **Default Security List for vcn-…**.
+3. Open **Security rules** (or **Ingress Rules**) and click **Add Ingress Rules**.
+4. Fill in:
+   - **Source Type:** CIDR. **Source CIDR:** `0.0.0.0/0`.
+   - **IP Protocol:** TCP.
+   - **Destination Port Range:** `80,443`.
+   - **Description:** e.g. `Caddy HTTP and HTTPS`.
+5. Click **Add Ingress Rules**. The list now has rules for 22 and for 80,443.
+
+If your subnet uses a Network Security Group instead (**Networking**, then **Network Security
+Groups**, attached to the instance's VNIC), add the same rule there. A new instance created as in
+step 2 uses the security list.
+
+## 4. Point a DuckDNS subdomain at the VM
+
+1. Go to https://www.duckdns.org and sign in.
+2. Under **domains**, type a name, e.g. `brain-tumour-api`, and click **add domain**. If it is
+   taken, choose another; the commands below write it as `<name>.duckdns.org`.
+3. In the new row, replace **current ip** with the VM's public IP from 2.3 and click **update
+   ip**.
+4. Check from your machine that the name resolves to the VM (it can take a minute):
+
+```powershell
+Resolve-DnsName brain-tumour-api.duckdns.org
+```
+
+The answer must show the VM's IP. The IP does not change while the instance exists (2.3), so this
+is a one-time setting. Do not share the **token** shown on the DuckDNS page: it lets anyone
+change where your name points.
+
+## 5. Prepare the VM
+
+**5.1 Connect over SSH.** From PowerShell, with the IP from 2.3:
+
+```powershell
+ssh -i $HOME\.ssh\oracle_vm ubuntu@<IP>
+```
+
+Answer `yes` to the fingerprint question the first time. The prompt changes to
+`ubuntu@brain-tumour-api:~$`. The commands in 5.2–5.4 and 6.3–6.5 run there, on the VM.
+
+**5.2 Install Docker and Docker Compose** from Docker's official repository:
+
+```bash
+sudo apt-get update && sudo apt-get -y upgrade
+sudo apt-get install -y ca-certificates curl
+sudo install -m 0755 -d /etc/apt/keyrings
+sudo curl -fsSL https://download.docker.com/linux/ubuntu/gpg -o /etc/apt/keyrings/docker.asc
+sudo chmod a+r /etc/apt/keyrings/docker.asc
+echo "deb [arch=$(dpkg --print-architecture) signed-by=/etc/apt/keyrings/docker.asc] https://download.docker.com/linux/ubuntu $(. /etc/os-release && echo "${UBUNTU_CODENAME:-$VERSION_CODENAME}") stable" | sudo tee /etc/apt/sources.list.d/docker.list > /dev/null
+sudo apt-get update
+sudo apt-get install -y docker-ce docker-ce-cli containerd.io docker-buildx-plugin docker-compose-plugin
+sudo usermod -aG docker ubuntu
+```
+
+The last line lets the `ubuntu` user run Docker without `sudo`. It takes effect at the next
+login, so log out (`exit`) and connect again (5.1). Then check:
+
+```bash
+docker run --rm hello-world     # prints "Hello from Docker!"
+docker compose version          # Docker Compose version v2.x
+```
+
+Docker starts on boot by itself, and the stack is set to restart with it, so a reboot of the VM
+brings the API back without you doing anything.
+
+**5.3 Open ports 80 and 443 in the VM's firewall.** Oracle's Ubuntu images come with their own
+`iptables` rules that reject everything except SSH, independently of the security list in step
+3. Allow the two ports, above the reject rule, and save the rules so they survive a reboot:
+
+```bash
+sudo iptables -I INPUT -p tcp -m multiport --dports 80,443 -m conntrack --ctstate NEW -j ACCEPT
+sudo netfilter-persistent save
+sudo iptables -L INPUT -n --line-numbers
+```
+
+The list must show the `ACCEPT … multiport dports 80,443` rule **above** the
+`REJECT … reject-with icmp-host-prohibited` line. (`-I` inserts at the top; a rule appended with
+`-A` would come after the reject and never apply.)
+
+Docker adds its own rules for the ports it publishes, which often let them through even without
+this step. Opening them explicitly means HTTPS does not depend on that. Do not enable `ufw` as
+well; it would manage the same rules and conflict with Oracle's.
+
+**5.4 Optional: a swap file**, as an extra safety net. The app fits comfortably without one (see
+[Sizing](#sizing)):
+
+```bash
+sudo fallocate -l 4G /swapfile && sudo chmod 600 /swapfile && sudo mkswap /swapfile && sudo swapon /swapfile
+echo '/swapfile none swap sw 0 0' | sudo tee -a /etc/fstab
+```
+
+## 6. Build the bundle, copy it and start the stack
+
+**6.1 Build the bundle** on your machine. From the repository root, in the project environment:
 
 ```powershell
 .\.venv\Scripts\Activate.ps1
-pip install -U huggingface_hub
-hf auth login          # paste the token from 1.1; answer "n" to adding it as a git credential
+python deploy/vm/build_bundle.py
 ```
 
-The token is saved in your user profile (`~/.cache/huggingface/`), not in the project.
+This writes the bundle to `build/vm/` and the same as one archive, `build/brain-tumour-api.tar.gz`
+(both gitignored). It holds:
 
-**1.4 Build the Space's files.** From the repository root:
-
-```powershell
-python deploy/huggingface/build_space.py
-```
-
-This writes the Space's contents to `build/hf-space/` (gitignored):
-
-- the code and `backend/Dockerfile`, with two settings added for the Space: no sample-study
+- the compose stack from `deploy/vm/`: `docker-compose.yml` (the API and Caddy), `Caddyfile`
+  and `.env.example`;
+- the code and `backend/Dockerfile`, with two settings added for the deployment: no sample-study
   files, and sample results required;
-- the Space card `deploy/huggingface/README.md`, which tells Hugging Face this is a Docker Space
-  on port 8010;
-- the five sample images;
+- the five sample images, and the hero render if you have one;
 - the sample results. These are computed here, once, with the release weights, which takes a few
   minutes on the CPU. The release weights come from `models/release/` or `models/` when they match,
-  and are downloaded into `build/release-weights/` otherwise (about 410 MB).
+  and are downloaded into `build/release-weights/` otherwise (about 413 MB).
 
-It ends with `Space bundle ready; no raw volumes, sample results match the release weights`.
+It ends with `Bundle ready: …; no raw volumes, sample results match the release weights` and the
+archive's path.
 
-The sample results are mandatory on the Space, because it has no raw volumes to recompute them
-from. Three checks enforce that, so a bad bundle fails loudly instead of serving nothing:
+The sample results are mandatory on the VM, because it has no raw volumes to recompute them from.
+Three checks enforce that, so a bad bundle fails loudly instead of serving nothing:
 
 - the bundle script stops if the results are missing or do not match the release weights;
-- the Space's image build runs the same check, and fails;
+- the image build on the VM runs the same check, and fails;
 - the API refuses to start without a matching file.
 
-**1.5 Upload them** (replace `your-name/brain-tumour-api` with your Space):
+**6.2 Copy the archive to the VM.** From the repository root, in PowerShell on your machine:
 
 ```powershell
-hf upload your-name/brain-tumour-api build/hf-space . --repo-type space
+scp -i $HOME\.ssh\oracle_vm build\brain-tumour-api.tar.gz ubuntu@<IP>:~
 ```
 
-**1.6 Watch it start.**
+**6.3 Unpack it** on the VM (over SSH, 5.1):
 
-1. Open the Space page and click **Logs**.
-2. **Build** shows the Docker build: about 5–10 minutes the first time.
-3. **Container** shows the start-up:
-   - the weights download (`models/segmentation/fold1/best.pt <- segmentation_fold1.pt` …,
-     about 410 MB);
-   - `loaded pre-computed sample results`;
-   - `Application startup complete`.
-4. The status badge turns **Running**.
+```bash
+tar -xzf brain-tumour-api.tar.gz
+cd brain-tumour-api
+```
 
-**1.7 Check the API.** Open `https://<owner>-<space-name>.hf.space/api/health`. You should see
-`"status":"ok"`, `"device":"cpu"` and `"sample_results":"ready"`. The interactive API docs are
-at `/docs` on the same address.
+**6.4 Set the domain and the allowed origin.** Create `.env` from the example:
 
-## 2. Create the Vercel project (the web client)
+```bash
+cp .env.example .env
+nano .env
+```
+
+Set `DOMAIN` to your DuckDNS name from step 4, e.g. `DOMAIN=brain-tumour-api.duckdns.org`.
+Leave `ALLOWED_ORIGIN` as it is for now; section 9 sets it once the Vercel site exists. Save with
+Ctrl+O, Enter, and exit with Ctrl+X.
+
+**6.5 Start the stack:**
+
+```bash
+docker compose up -d --build
+```
+
+- The first build takes about 5–10 minutes: it installs PyTorch for ARM and checks the sample
+  results (the `RUN python -m backend.services.samples` step). Later builds reuse what they can.
+- `-d` runs the stack in the background; it keeps running after you log out.
+
+Follow the start-up:
+
+```bash
+docker compose logs -f
+```
+
+Press Ctrl+C to stop following (the stack keeps running). A healthy start shows:
+
+- `api`: the weights download (`models/segmentation/fold1/best.pt <- segmentation_fold1.pt` …),
+  then `loaded pre-computed sample results` and `Application startup complete`;
+- `caddy`: `certificate obtained successfully` for your domain, within a minute of starting.
+
+`docker compose ps` shows both services; the API turns `healthy` once its models are loaded.
+
+## 7. Check HTTPS and the API
+
+From your machine, open `https://<name>.duckdns.org/api/health` in the browser. It must load
+with a padlock and no certificate warning, and show `"status":"ok"`, `"device":"cpu"` and
+`"sample_results":"ready"`. The interactive API docs are at `https://<name>.duckdns.org/docs`.
+
+Or in PowerShell:
+
+```powershell
+curl.exe -s https://brain-tumour-api.duckdns.org/api/health
+curl.exe -s -o NUL -w "%{http_code} %{redirect_url}\n" http://brain-tumour-api.duckdns.org/api/health
+```
+
+The second line checks the redirect: it prints `308 https://brain-tumour-api.duckdns.org/api/health`.
+
+If the certificate does not arrive, see [When something is wrong](#when-something-is-wrong):
+nearly always DNS (step 4) or a closed port (steps 3 and 5.3). Caddy retries by itself, so after
+fixing the cause, wait a minute and check `docker compose logs caddy` again.
+
+`https://<name>.duckdns.org` is the API's URL for the next steps.
+
+## 8. Create the Vercel project (the web client)
 
 1. On vercel.com, click **Add New…**, then **Project**.
 2. Next to `Brain-Tumour-Detector`, click **Import**. If the repository is not listed, click
@@ -146,12 +339,11 @@ at `/docs` on the same address.
      matters: the app is in `frontend/`, not the repository root.
    - **Framework Preset:** Next.js (detected). Leave the build and output settings as they are.
    - **Environment Variables:** add
-     - **Key** `NEXT_PUBLIC_API_URL`, **Value** your Space's URL from step 1.2, e.g.
-       `https://your-name-brain-tumour-api.hf.space`, with no trailing slash;
-     - optional, for the Overview's 3D image: **Key** `HERO_IMAGE_URL`, **Value**
-       `https://huggingface.co/spaces/<owner>/<space-name>/resolve/main/assets/hero-3d.png`.
-       This only works if the bundle has `assets/hero-3d.png` (step 1.4 says if it has not).
-       Without it, the Overview shows a note where the image would be.
+     - **Key** `NEXT_PUBLIC_API_URL`, **Value** your API URL from step 7, e.g.
+       `https://brain-tumour-api.duckdns.org`, with no trailing slash;
+     - optional, for the Overview's 3D image: **Key** `HERO_IMAGE_URL`, **Value** the API URL
+       followed by `/api/hero.png`. This only works if the bundle has the render (step 6.1 says
+       if it has not). Without it, the Overview shows a note where the image would be.
 4. Click **Deploy**. The build takes 1–2 minutes.
 5. When it finishes, note the site's address. It is under **Domains** on the project page, e.g.
    `https://brain-tumour-detector.vercel.app`. Use this production domain, not the
@@ -164,27 +356,29 @@ latest deployment, then **Redeploy**.
 `NEXT_PUBLIC_API_URL` is fixed into the site when it is built. After changing it, redeploy;
 saving the variable alone changes nothing.
 
-## 3. Allow the Vercel site to call the API
+## 9. Allow the Vercel site to call the API
 
 The API answers browser requests only from the origins it allows. By default those are local
-development addresses.
+development addresses. On the VM, in `~/brain-tumour-api`:
 
-1. On the Space page, open **Settings**, then **Variables and secrets**.
-2. Click **New variable** (a variable, not a secret; the value is not confidential):
-   - **Name** `ALLOWED_ORIGIN`;
-   - **Value** the Vercel address from step 2.5, e.g. `https://brain-tumour-detector.vercel.app`.
-     Use `https://` and no trailing slash or path.
-3. Save. The Space restarts with the new setting, which takes a few minutes. Watch **Logs**
-   again until it is **Running**.
+```bash
+nano .env        # ALLOWED_ORIGIN=https://brain-tumour-detector.vercel.app
+docker compose up -d
+```
 
-For more than one address, e.g. a custom domain as well, separate them with commas.
+- Use your address from step 8.5: `https://`, and no trailing slash or path.
+- For more than one address, e.g. a custom domain as well, separate them with commas:
+  `ALLOWED_ORIGIN=https://a.vercel.app,https://www.example.com`.
+- `docker compose up -d` recreates the API container with the new setting. A new container
+  downloads the weights again, so the API is back after about a minute. Caddy keeps running and
+  keeps its certificate.
 
-## 4. Check that they talk to each other
+## 10. Check that they talk to each other
 
-**From the command line:**
+**From the command line** (with your two addresses):
 
 ```powershell
-curl.exe -s -D - -o NUL -H "Origin: https://brain-tumour-detector.vercel.app" https://your-name-brain-tumour-api.hf.space/api/health
+curl.exe -s -D - -o NUL -H "Origin: https://brain-tumour-detector.vercel.app" https://brain-tumour-api.duckdns.org/api/health
 ```
 
 The headers must include
@@ -201,28 +395,128 @@ The headers must include
    file being downloaded or uploaded. The caption says "pre-computed".
 4. In the result, open the **3D** view: the brain and tumour surfaces load.
 5. The console shows no errors mentioning CORS or "blocked". The **Network** tab shows only
-   `https://` requests to `hf.space`.
+   `https://` requests to your `duckdns.org` name.
 
-Your own uploads still run the models on the Space's CPU. A classification takes a few seconds.
-A segmentation takes several minutes, with live progress.
+Your own uploads run the models on the VM's 2 cores. A classification takes a few seconds. A
+segmentation takes roughly 15–30 minutes, with live progress (see [Sizing](#sizing)).
+
+## Always on: no cold starts
+
+The VM runs all the time, and so does the API. It downloads the weights once, when its container
+is first created, and keeps them across restarts and reboots. So unlike a scale-to-zero host
+(such as Google Cloud Run, where each new instance starts from scratch), there is no cold start: no weights download
+and no model loading when a visitor arrives after a quiet spell. Every request is answered at
+normal speed, and the sample buttons answer at once.
+
+The weights are downloaded again only when the API container is recreated: after an update
+(section "Updating later") or a change to `.env`. That takes about a minute, inside Oracle's
+network.
+
+## Sizing
+
+**Memory: the app needs at most about 6 GiB; the VM has 12 GB.** Measured on this deployment
+(the bundle's image and compose stack, requests going through Caddy over HTTPS), with the API
+container limited to 2 CPU cores as on the VM. The test ran three segmentations of different
+BraTS studies back to back, with two classifications every 10 seconds alongside, and sampled the
+memory every 2 seconds for 65 minutes:
+
+| Situation | Memory |
+|---|---|
+| API idle after a fresh start, all six models loaded | 1.2–1.6 GiB |
+| API during a segmentation, with classifications alongside | **5.6–5.9 GiB** (peak, in each of the three) |
+| API idle after each of the three segmentations | 1.5, 2.3, 1.9 GiB |
+| Caddy | 20–40 MiB |
+
+- **No growth over time.** After a job the API does not drop all the way back to its fresh-start
+  level: it keeps the recent results for download, and the memory allocator keeps some freed
+  memory for reuse. But that does not build up from job to job (1.5, 2.3, 1.9 GiB above), and
+  every segmentation peaks at the same level. A long-running API behaves like a fresh one.
+- **Headroom:** at the peak, the API (about 6 GiB), Caddy and Ubuntu itself (about 0.5 GiB)
+  together use about 6.5 GiB of the VM's 12 GB (about 11.2 GiB usable), leaving about 4.5 GiB
+  free. No swap is needed.
+- **Measured on x86, not on the Ampere VM.** PyTorch on ARM uses different kernels, so the
+  numbers there will differ somewhat, but not by gigabytes. Check them on the VM with
+  `docker stats` during your first segmentation.
+
+- **Jobs run one at a time.** Segmentations queue rather than run in parallel, so the peak does
+  not grow with the number of visitors; more visitors only make the queue longer.
+- **Results kept in memory are bounded:** the 16 most recent results (`BT_RESULT_CACHE_SIZE`),
+  then the oldest are dropped.
+- **A memory limit of 9 GB** is set on the API container (`mem_limit` in `docker-compose.yml`),
+  well above its peak. If something ever went wrong and it grew past that, Docker would restart
+  the container instead of the whole VM running out of memory and becoming unreachable over SSH.
+
+**CPU: 2 cores.** A classification takes a few seconds. A segmentation runs five models over the
+whole volume: 14–32 minutes in the test above, on 2 x86 cores with classifications alongside.
+Ampere cores are full cores (no hyper-threading), so expect the same order of time; it has not
+been measured on Ampere. While a segmentation runs, it keeps both cores busy. The site stays
+responsive (Caddy retries a connection to the API that stalls, see `deploy/vm/Caddyfile`), and SSH
+still works.
+
+**Disk:** the image is about 2 GB and the weights 0.4 GB; the 50 GB boot volume has plenty of
+room. Docker's logs are capped at 30 MB per container (`logging` in `docker-compose.yml`), so a
+long-running VM does not fill its disk with them.
+
+## Staying within Always Free
+
+- **Compute:** 2 OCPUs and 12 GB of Ampere A1 is the whole allowance, so do not create a second
+  A1 instance alongside this one.
+- **Storage:** 200 GB of block storage in total (boot volumes included); this VM uses 50 GB.
+- **Traffic:** 10 TB a month of outbound data is free, far more than this app's small images and
+  JSON responses need.
+- **Idle instances can be reclaimed.** Oracle may stop an Always Free instance it deems idle:
+  one where, over 7 days, CPU use (95th percentile), network use and memory use all stay below
+  20%. An API with few visitors is idle by that measure: CPU and network are near zero, and
+  memory is about 15–20% of 12 GB when nothing runs. So:
+  - check on the instance now and then (**Compute**, then **Instances**). If it was stopped,
+    click **Start**: the stack comes back by itself, with the same IP and certificate;
+  - or upgrade the account to **Pay As You Go** (**Billing & Cost Management**, then **Upgrade
+    and Manage Payment**). Always Free resources stay free after the upgrade, and the idle
+    reclamation is widely reported not to apply to such accounts (Oracle's page does not say so
+    explicitly). If you upgrade, add a budget with an alert at a small amount (**Billing & Cost
+    Management**, then **Budgets**), since a paid account could then create resources that are
+    not free.
 
 ## When something is wrong
 
 | Symptom | Cause and fix |
 |---|---|
-| Vercel build: `NEXT_PUBLIC_API_URL is not set` | Add the variable (step 2.3) and redeploy. |
-| Site: "The API at … is not reachable", or the Overview says the results are unavailable | The Space is asleep or starting. Open the Space page to wake it, wait until **Running**, reload. |
-| Console: "blocked by CORS policy" | `ALLOWED_ORIGIN` on the Space does not equal the site's address exactly (scheme, no trailing slash). Fix it (step 3). Preview deployments have their own addresses; test on the production domain or add them. |
-| Space logs: `Download failed`, or a GitHub error | The weights could not be downloaded. Check that the repository's `weights-v1` release is public, then restart the Space: **Settings**, **Factory reboot**. |
-| Space build fails at `python -m backend.services.samples`, or the container stops with `BT_SAMPLE_RESULTS_REQUIRED` | The sample results are missing or were computed for other weights or settings. Rebuild the bundle (step 1.4) and upload it again (step 1.5). |
-| Space build fails | Open **Logs**, **Build**. Rebuild the bundle (step 1.4) and upload it again (step 1.5). |
+| Creating the instance: "Out of capacity for shape VM.Standard.A1.Flex" | The region has no free Ampere capacity at the moment. Try another **Availability domain** in step 2.2 (under **Placement**), or try again later; capacity comes and goes. |
+| `ssh`: "Connection timed out" | Wrong IP, or the instance is not running. Port 22 is open by default; if you edited the security list, check that its rule for 22 is still there. |
+| `ssh`: "Permission denied (publickey)" | Use `-i $HOME\.ssh\oracle_vm` and the user `ubuntu`. The key must be the one pasted in step 2.2. |
+| `docker: permission denied … docker.sock` | You have not logged in again since adding `ubuntu` to the `docker` group (5.2). `exit` and connect again. |
+| `docker compose up`: "set DOMAIN in .env" | `.env` is missing or has no `DOMAIN` (6.4). Run the command from `~/brain-tumour-api`, where `.env` is. |
+| `caddy` logs: "timeout during connect", "connection refused" or "Fetching http://…/.well-known/acme-challenge" errors | Let's Encrypt cannot reach the VM on port 80. Check the security list rule (step 3) and the VM's firewall (5.3): `curl http://<name>.duckdns.org` from your machine must answer (a redirect is fine). |
+| `caddy` logs: "NXDOMAIN" or "no valid A records" | The DuckDNS name does not point at the VM yet (step 4). Fix it; Caddy retries by itself. |
+| `caddy` logs: "too many certificates" or "rateLimited" | Let's Encrypt limits how often one name is issued. Wait as the message says. Avoid `docker compose down -v`, which deletes the stored certificate (the `caddy_data` volume) and forces a new one. |
+| Browser: the page loads, but the API answers 502 | Caddy is up, the API is not (yet). `docker compose logs api`: it may still be downloading the weights or loading the models. |
+| Build fails at `python -m backend.services.samples`, or the API logs show `BT_SAMPLE_RESULTS_REQUIRED` | The sample results are missing or were computed for other weights or settings. Rebuild the bundle (6.1) and deploy it again ("Updating later"). |
+| API logs: `Download failed`, or a GitHub error | The weights could not be downloaded. Check that the repository's `weights-v1` release is public, then `docker compose restart api`. |
+| Vercel build: `NEXT_PUBLIC_API_URL is not set` | Add the variable (step 8.3) and redeploy. |
+| Site: "The API at … is not reachable", or the Overview says the results are unavailable | `curl.exe -s https://<name>.duckdns.org/api/health` from your machine. If that fails, check `docker compose ps` on the VM, and that the instance is running (it may have been reclaimed; see [Staying within Always Free](#staying-within-always-free)). |
+| Console: "blocked by CORS policy" | `ALLOWED_ORIGIN` does not equal the site's address exactly (scheme, no trailing slash). Fix it (section 9). Preview deployments have their own addresses; test on the production domain or add them. |
+| `docker compose ps` shows the API restarting, `docker inspect` says `OOMKilled` | It went past its 9 GB limit, which it should not do (see [Sizing](#sizing)). Look at `docker compose logs api` for what it was doing. |
 
 ## Updating later
 
 - **Web client:** push to `main` on GitHub. Vercel builds and deploys each push automatically.
-- **API:** rebuild the bundle and upload it again (steps 1.4 and 1.5). The Space rebuilds on
-  every upload.
-- **Free-tier behaviour:** a free Space sleeps after 48 hours without visitors. The next visit
-  wakes it, and the restart downloads the weights again, which takes a few minutes. It has no
-  persistent disk: anything written at run time is lost on restart. The bundled sample results
-  are part of the image, so they survive.
+- **API:** rebuild the bundle (6.1) and copy it (6.2). Then on the VM:
+
+```bash
+rm -rf ~/brain-tumour-api.new && mkdir ~/brain-tumour-api.new
+tar -xzf ~/brain-tumour-api.tar.gz -C ~/brain-tumour-api.new --strip-components=1
+cp ~/brain-tumour-api/.env ~/brain-tumour-api.new/
+rm -rf ~/brain-tumour-api && mv ~/brain-tumour-api.new ~/brain-tumour-api
+cd ~/brain-tumour-api && docker compose up -d --build
+```
+
+  This replaces the folder (so files removed from the code do not linger) and keeps your `.env`.
+  Caddy's certificate lives in a Docker volume and is kept. The API is unavailable for the few
+  minutes of the build's last steps and the weights download. Afterwards, `docker image prune -f`
+  removes the old image.
+- **Logs:** `docker compose logs --tail 100 api` (or `caddy`), in `~/brain-tumour-api`.
+- **Restart:** `docker compose restart api`. **Stop:** `docker compose down` (keeps the
+  certificate; do not add `-v`).
+- **Taking it offline:** `docker compose down` on the VM stops the API. To remove everything,
+  terminate the instance in the console (**Compute**, **Instances**, **⋯**, **Terminate**, with
+  **Permanently delete the attached boot volume** ticked), and delete the DuckDNS subdomain.

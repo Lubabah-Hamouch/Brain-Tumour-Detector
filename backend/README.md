@@ -54,7 +54,8 @@ uvicorn backend.main:app --port 8010
 - **Data:** mount it at `/app/data` for the sample buttons.
 - **Compose:** `docker-compose.yml` at the root wires this up with the web client; see "Running
   with Docker" in the root README.
-- **Hugging Face Space:** the same Dockerfile runs as a Docker Space; see `DEPLOYMENT.md`.
+- **Port:** `$PORT` when set, else 8010.
+- **VM deployment:** the same Dockerfile runs behind Caddy on a VM; see `DEPLOYMENT.md`.
 
 ```bash
 docker build -f backend/Dockerfile -t brain-tumour-api .
@@ -76,8 +77,8 @@ Settings come from environment variables:
 | `BT_MAX_IMAGE_MB` / `BT_MAX_VOLUME_MB` | 20 / 200 | upload limits |
 | `BT_RESULT_CACHE_SIZE` | 16 | recent results kept for download: segmentation masks, viewer slices and 3D surfaces, classification reports, finished jobs |
 | `BT_SAMPLE_RESULTS` | `models/sample_results.npz` | where the pre-computed sample results are saved and loaded; `off` disables them |
-| `BT_SAMPLE_RESULTS_REQUIRED` | `0` | `1`: refuse to start unless that file holds results for the served models (the Hugging Face Space, which cannot recompute them) |
-| `BT_SAMPLE_STUDY_FILES` | `1` | `0`: no `GET /api/sample-study` endpoints, so the sample study's raw NIfTI files are never served (the Hugging Face Space) |
+| `BT_SAMPLE_RESULTS_REQUIRED` | `0` | `1`: refuse to start unless that file holds results for the served models (the public deployment, which cannot recompute them) |
+| `BT_SAMPLE_STUDY_FILES` | `1` | `0`: no `GET /api/sample-study` endpoints, so the sample study's raw NIfTI files are never served (the public deployment) |
 | `BT_DOWNLOAD_WEIGHTS` | `1` | Docker only: `0` skips downloading missing weights on start |
 
 The default `BT_ET_MIN_VOXELS` is read from `reports/results/segmentation_test.json`, where it was

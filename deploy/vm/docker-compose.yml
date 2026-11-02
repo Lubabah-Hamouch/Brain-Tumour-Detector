@@ -1,0 +1,53 @@
+# The API on a single VM, behind Caddy for HTTPS. deploy/vm/build_bundle.py copies this file into
+# the bundle (build/vm/), next to the Dockerfile it builds; it is run from there, on the VM:
+#   docker compose up -d --build
+# Settings come from .env in the same folder (see .env.example): DOMAIN and ALLOWED_ORIGIN.
+# DEPLOYMENT.md has the full steps.
+services:
+  api:
+    build: .
+    image: brain-tumour-api:vm
+    # A minimal init as PID 1 forwards stop signals and reaps child processes.
+    init: true
+    restart: unless-stopped
+    # Not published on the host: only Caddy reaches it, over the compose network.
+    expose:
+      - "8010"
+    environment:
+      # The deployed web client, e.g. https://your-app.vercel.app (comma-separated for several).
+      ALLOWED_ORIGIN: ${ALLOWED_ORIGIN:-}
+    # The weights are downloaded into the container on its first start (about 413 MB) and kept
+    # across restarts and reboots; they are downloaded again only when the container is recreated,
+    # e.g. by an update. The sample results come with the image.
+    # A segmentation peaks at about 6 GiB (DEPLOYMENT.md, "Sizing"). The limit keeps a runaway
+    # from taking the whole VM down with it: the container is restarted instead.
+    mem_limit: 9g
+    logging:
+      driver: json-file
+      options: { max-size: "10m", max-file: "3" }
+
+  caddy:
+    image: caddy:2
+    restart: unless-stopped
+    ports:
+      - "80:80"
+      - "443:443"
+    environment:
+      # The public host name, e.g. brain-tumour-api.duckdns.org. Caddy gets and renews its
+      # certificate from Let's Encrypt, which needs ports 80 and 443 open to the internet.
+      DOMAIN: ${DOMAIN:?set DOMAIN in .env, e.g. DOMAIN=brain-tumour-api.duckdns.org}
+    volumes:
+      - ./Caddyfile:/etc/caddy/Caddyfile:ro
+      # Certificates and account keys: kept across restarts and updates, so they are not requested
+      # again (Let's Encrypt limits how often a name can be issued).
+      - caddy_data:/data
+      - caddy_config:/config
+    depends_on:
+      - api
+    logging:
+      driver: json-file
+      options: { max-size: "10m", max-file: "3" }
+
+volumes:
+  caddy_data:
+  caddy_config:

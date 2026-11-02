@@ -1,0 +1,16 @@
+# HTTPS in front of the API (deploy/vm/docker-compose.yml). {$DOMAIN} comes from .env. For a real
+# host name Caddy obtains a Let's Encrypt certificate on its own and renews it; for "localhost" it
+# uses a local, self-signed one, for testing.
+{$DOMAIN} {
+	encode zstd gzip
+
+	# Caddy sends X-Forwarded-For/-Proto and keeps the Host header, so the API builds https://
+	# result URLs with this host name.
+	reverse_proxy api:8010 {
+		# While a segmentation keeps both cores busy, opening a connection to the API can stall
+		# for a moment. Retry it for up to 15 s rather than answer 502 at once. Only failed
+		# connections are retried: a request that reached the API is never sent twice.
+		lb_try_duration 15s
+		lb_try_interval 500ms
+	}
+}

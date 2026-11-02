@@ -16,9 +16,9 @@
     BT_SAMPLE_RESULTS         file for the pre-computed sample results (backend/services/samples.py),
                               default models/sample_results.npz; "off" disables pre-computing samples
     BT_SAMPLE_RESULTS_REQUIRED  1: refuse to start unless BT_SAMPLE_RESULTS holds results for the served
-                              models (the Hugging Face Space, which cannot recompute them); default 0
+                              models (the public deployment, which cannot recompute them); default 0
     BT_SAMPLE_STUDY_FILES     0: do not serve the sample study's NIfTI files (GET /api/sample-study and
-                              /api/sample-study/{name} do not exist); default 1. The Space sets 0: the
+                              /api/sample-study/{name} do not exist); default 1. The deployment sets 0: the
                               BraTS terms do not allow redistributing the raw volumes.
 """
 import json

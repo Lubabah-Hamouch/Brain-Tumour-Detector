@@ -182,7 +182,7 @@ There are two ways to run the app:
   downloads the trained weights on its first start.
 - **From source** (this section): needed to retrain the models or rerun the evaluation.
 
-To put it online on free tiers (the API on a Hugging Face Space, the web client on Vercel), see
+To put it online for free (the API on an Oracle Cloud Always Free VM, the web client on Vercel), see
 [Deployment](#deployment).
 
 Either way, the app needs the trained weights. Download the published ones with
@@ -336,15 +336,17 @@ docker compose -f docker-compose.yml -f docker-compose.gpu.yml up --build    # N
 
 ## Deployment
 
-The app runs on free tiers: the API as a Docker Space on Hugging Face (CPU), the web client on
-Vercel. **[DEPLOYMENT.md](DEPLOYMENT.md)** lists every step.
+The app runs within free tiers: the API in Docker on an Oracle Cloud Always Free VM (Ampere A1,
+CPU, always on), behind Caddy for automatic HTTPS, and the web client on Vercel.
+**[DEPLOYMENT.md](DEPLOYMENT.md)** lists every step.
 
-- **Space contents:** `deploy/huggingface/build_space.py` assembles them: the code, the five
-  sample images and the sample results computed in advance. The sample patient's raw BraTS
-  volumes are never deployed or served there; only results derived from them are.
-- **Weights:** the container downloads them from the release when it starts.
-- **Connecting the two:** Vercel's `NEXT_PUBLIC_API_URL` points the site at the Space, and the
-  Space's `ALLOWED_ORIGIN` allows the site to call it.
+- **Bundle:** `deploy/vm/build_bundle.py` assembles what the VM runs: the code, the compose stack
+  (`deploy/vm/`: the API and Caddy), the five sample images and the sample results computed in
+  advance. The sample patient's raw BraTS volumes are never deployed or served there; only results
+  derived from them are.
+- **Weights:** the container downloads them from the release on its first start.
+- **Connecting the two:** Vercel's `NEXT_PUBLIC_API_URL` points the site at the service, and the
+  service's `ALLOWED_ORIGIN` allows the site to call it.
 
 ## Data and terms of use
 
@@ -393,7 +395,7 @@ tests/       Tests for the API, job queue, models, losses, preprocessing and tra
 models/      Trained checkpoints (gitignored; python -m src.download_weights)
 docs/        Screenshots for this README
 
-deploy/      Hugging Face Space card and bundle script                           (DEPLOYMENT.md)
+deploy/      VM bundle script, compose stack and Caddyfile                       (DEPLOYMENT.md)
 
 docker-compose.yml, docker-compose.gpu.yml   Docker setup (backend/Dockerfile, frontend/Dockerfile)
 requirements*.txt                            Python dependencies: core, API, hero render

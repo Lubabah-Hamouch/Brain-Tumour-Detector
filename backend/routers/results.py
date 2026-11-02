@@ -8,6 +8,7 @@ import json
 from collections import Counter
 
 from fastapi import APIRouter, Request
+from fastapi.responses import FileResponse
 
 from backend.schemas.common import ErrorResponse
 from backend.services.errors import ApiError, relative_name
@@ -61,6 +62,21 @@ def summary(classifier_checkpoint):
         "sources": ["reports/results/segmentation_test.json", f"reports/results/{clf_file}",
                     "reports/results/format_stress_test.json"],
     }
+
+
+HERO_IMAGE = PROJECT_ROOT / "data" / "hero" / "hero-3d.png"
+
+
+@router.get("/hero.png", response_class=FileResponse,
+            responses={200: {"content": {"image/png": {}}}, 404: {"model": ErrorResponse}},
+            summary="The Overview's 3D render of the sample patient, where it is deployed",
+            description="A render of the model's prediction (src/visualization/render_hero.py), included in the "
+                        "deployment bundle so the web client can show it (HERO_IMAGE_URL). 404 elsewhere: locally "
+                        "the web client reads its own copy.")
+def hero_image():
+    if not HERO_IMAGE.exists():
+        raise ApiError(404, "hero_not_found", "No Overview render is deployed with this API.")
+    return FileResponse(HERO_IMAGE, media_type="image/png", headers={"Cache-Control": "public, max-age=86400"})
 
 
 @router.get("/results/summary", responses={503: {"model": ErrorResponse}},

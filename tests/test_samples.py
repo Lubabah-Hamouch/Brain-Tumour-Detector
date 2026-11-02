@@ -110,7 +110,7 @@ def setup(tmp_path):
         study[m].write_bytes(f"volume {m}".encode())
 
     def make(study_files=study):
-        """study_files={}: the Space, where the sample study's files are absent."""
+        """study_files={}: the public deployment, where the sample study's files are absent."""
         clf, seg = FakeClassifier(ckpt), FakeSegmenter()
         return (SampleResults(tmp_path / "out" / "samples.npz", clf, seg, [ckpt], {image.name: image}, study_files),
                 clf, seg)
@@ -153,7 +153,7 @@ def test_samples_are_served_by_content_and_survive_a_restart(setup):
     assert again.load() and again.ready and clf2.calls == seg2.calls == 0
     assert again.classification(image.name, image.read_bytes(), "")["result_id"] == hit["result_id"]
     assert seg2.cache.get(seg_hit["result_id"]) is not None
-    # Without the study's files (the Space) the saved study result still loads and is served.
+    # Without the study's files (the public deployment) the saved study result still loads and is served.
     space, _, seg3 = make(study_files={})
     assert space.load() and space.has_study and seg3.calls == 0
     assert space.study_result("https://space")["mask_url"].startswith("https://space/api/segment/")

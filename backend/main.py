@@ -39,8 +39,8 @@ def sample_results(settings, classifier, segmenter, jobs):
     The computation is an ordinary job in the queue, so an upload sent while it runs waits its turn
     as behind any other job. Until it finishes, sample uploads run the models like any other.
 
-    With BT_SAMPLE_RESULTS_REQUIRED (the Hugging Face Space, which has no sample study files to
-    compute from) a missing or mismatched file stops the start-up instead."""
+    With BT_SAMPLE_RESULTS_REQUIRED (the public deployment, which has no sample study files
+    to compute from) a missing or mismatched file stops the start-up instead."""
     required = settings.sample_results_required
     if settings.sample_results is None:
         if required:
@@ -60,7 +60,7 @@ def sample_results(settings, classifier, segmenter, jobs):
         raise RuntimeError(
             f"BT_SAMPLE_RESULTS_REQUIRED=1 but {settings.sample_results} is missing, unreadable, lacks the sample "
             "study, or was computed for other weights, settings or sample images (see the warning above). "
-            "Rebuild it with python deploy/huggingface/build_space.py.")
+            "Rebuild it with python deploy/vm/build_bundle.py.")
     if not loaded:
         log.info("computing the sample results in the background")
 
@@ -122,7 +122,7 @@ def create_app(settings=None):
         return JSONResponse(status_code=500, content=error_body("internal_error", f"{type(exc).__name__}: {exc}"))
 
     routers = [health.router, classification.router, segmentation.router, results.router]
-    if settings.sample_study_files:  # off on the Space: the raw volumes are not redistributed
+    if settings.sample_study_files:  # off when deployed: the raw volumes are not redistributed
         routers.append(segmentation.sample_files_router)
     for router in routers:
         app.include_router(router)

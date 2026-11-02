@@ -59,7 +59,7 @@ reports/*
 !reports/results/
 figure*.png
 
-# Hugging Face Space bundle and the weights it is checked against (deploy/huggingface/build_space.py)
+# Deployment bundle and the weights it is checked against (deploy/vm/build_bundle.py)
 build/
 
 # Experiment tracking (local run files)

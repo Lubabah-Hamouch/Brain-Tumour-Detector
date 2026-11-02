@@ -546,7 +546,7 @@ def test_saved_sample_results_load_on_restart(sample_client, sample_results_file
 
 
 def test_public_deployment_serves_no_sample_study_files(sample_client, sample_results_file):
-    """The Space's settings: no route to the raw volumes, the result still served."""
+    """The public deployment's settings: no route to the raw volumes, the result still served."""
     with make_client(sample_results_file, sample_study_files=False, sample_results_required=True) as c:
         paths = c.get("/openapi.json").json()["paths"]
         assert "/api/sample-study" not in paths and "/api/sample-study/{name}" not in paths
@@ -568,3 +568,16 @@ def test_required_sample_results_stop_start_up(tmp_path, sample_results_file, pr
     with pytest.raises(RuntimeError, match="BT_SAMPLE_RESULTS_REQUIRED"):
         with make_client(path, **settings):
             pass
+
+
+def test_hero_image_only_where_deployed(client, monkeypatch, tmp_path):
+    from backend.routers import results
+
+    monkeypatch.setattr(results, "HERO_IMAGE", tmp_path / "missing.png")
+    r = client.get("/api/hero.png")
+    assert r.status_code == 404 and r.json()["error"]["code"] == "hero_not_found"
+    hero = tmp_path / "hero-3d.png"
+    Image.new("RGB", (4, 4)).save(hero)
+    monkeypatch.setattr(results, "HERO_IMAGE", hero)
+    r = client.get("/api/hero.png")
+    assert r.status_code == 200 and r.headers["content-type"] == "image/png" and r.content == hero.read_bytes()

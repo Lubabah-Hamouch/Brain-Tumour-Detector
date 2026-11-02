@@ -6,7 +6,7 @@ the download, slice, mesh and report endpoints read. The web client's sample but
 from there at once; every other upload runs the models exactly as before.
 
 - The sample study's result is returned by POST /api/sample-study/segment, without any files
-  changing hands. On the Hugging Face Space that is the only way: the study's raw volumes are not
+  changing hands. On the public deployment that is the only way: the study's raw volumes are not
   deployed (BraTS terms), so the result comes from the saved file and cannot be recomputed there.
 - An upload of a sample is also answered from them, matched on content: field, file name, size and
   SHA-256 of the bytes must all match. A file that differs in any way runs the models. The size
@@ -103,7 +103,7 @@ class SampleResults:
     def __init__(self, path, classifier, segmenter, checkpoints, classification_inputs, segmentation_inputs):
         """checkpoints: the served checkpoint files; classification_inputs: {file name: path};
         segmentation_inputs: {modality: path}, or {} where the sample study's files are not present
-        (the Hugging Face Space), in which case its result can only come from the saved file."""
+        (the public deployment), in which case its result can only come from the saved file."""
         self.path = Path(path) if path else None
         self.checkpoints = [Path(p) for p in checkpoints]
         self.classifier, self.segmenter = classifier, segmenter
@@ -156,7 +156,7 @@ class SampleResults:
 
     def load(self):
         """Pin the saved results if the file matches the served checkpoints and settings, and every sample
-        file present here. Sample files that are absent (the study on the Space) cannot be checked and are
+        file present here. Sample files that are absent (the study on the public deployment) cannot be checked and are
         taken as saved. Returns True if it loaded the file."""
         if self.path is None or not self.path.exists():
             return False
@@ -245,7 +245,7 @@ class SampleResults:
 def check_release_file(path, image_names, et_min_voxels):
     """Problems that stop a saved results file from serving with the release weights (empty: it will).
 
-    The Hugging Face Space has no sample study files to recompute from, so its image build runs this
+    The public deployment has no sample study files to recompute from, so its image build runs this
     (python -m backend.services.samples) and fails on any problem, rather than start without results."""
     if not Path(path).exists():
         return [f"{path} is missing"]
@@ -282,5 +282,5 @@ if __name__ == "__main__":
     found = check_release_file(target, SAMPLES, tuned_et_threshold())
     if found:
         sys.exit(f"Sample results unusable: {'; '.join(found)}. Rebuild the bundle with "
-                 "python deploy/huggingface/build_space.py.")
+                 "python deploy/vm/build_bundle.py.")
     print(f"{target}: results for the sample study and {len(SAMPLES)} sample images, release weights")

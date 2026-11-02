@@ -11,7 +11,7 @@ const appRoot = path.resolve(__dirname);
 if (process.env.VERCEL && !process.env.NEXT_PUBLIC_API_URL) {
   throw new Error(
     "NEXT_PUBLIC_API_URL is not set. Add it in the Vercel project under Settings > Environment Variables " +
-      "(the API's URL, e.g. https://<user>-<space>.hf.space), then redeploy. See DEPLOYMENT.md.",
+      "(the API's URL, e.g. https://brain-tumour-api.duckdns.org), then redeploy. See DEPLOYMENT.md.",
   );
 }
 
