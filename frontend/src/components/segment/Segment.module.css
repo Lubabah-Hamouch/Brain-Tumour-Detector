@@ -548,7 +548,7 @@ button.seqButton {
   }
 }
 
-.volume {
+.volume3d {
   position: relative;
   width: 100%;
   height: 100%;
@@ -585,8 +585,8 @@ button.seqButton {
   max-width: 420px;
 }
 
-.volume[data-state="error"] .volumeMessage,
-.volume[data-state="unsupported"] .volumeMessage {
+.volume3d[data-state="error"] .volumeMessage,
+.volume3d[data-state="unsupported"] .volumeMessage {
   color: var(--color-text-strong);
   pointer-events: auto;
 }

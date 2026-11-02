@@ -69,8 +69,8 @@ T2 and CT images are poorly covered, and normal slices through the sella can be 
 ## The application
 
 The screenshots below are of the running app. The patient images in them come from the held-out
-test sets: BraTS 2021 patient `BraTS2021_00003` and a test image from the Brain Tumor MRI Dataset,
-both cited under [Data and terms of use](#data-and-terms-of-use).
+test sets: BraTS 2021 patient `BraTS2021_00003` and two test images from the Brain Tumor MRI
+Dataset, both datasets cited under [Data and terms of use](#data-and-terms-of-use).
 
 ![Overview screen](docs/screenshots/overview.png)
 <sub>Overview: a 3D render of held-out BraTS 2021 test patient BraTS2021_00003 with the ensemble's
@@ -87,6 +87,16 @@ tumour regions as surfaces.</sub>
 ![Classify screen](docs/screenshots/classify.png)
 <sub>Classify: a held-out test image from the Brain Tumor MRI Dataset with the prediction, all four
 probabilities and the Grad-CAM heatmap with its half-peak outline.</sub>
+
+![Classify screen, "No tumour" result](docs/screenshots/classify-no-tumour.png)
+<sub>Classify, "No tumour": a held-out test image predicted as no tumour. The plain image is shown
+first, with a note that the heatmap would not indicate a lesion; Heatmap and Overlay are one click
+away.</sub>
+
+<img src="docs/screenshots/segment-mobile.png" alt="Segment screen on a phone" width="300">
+
+<sub>Segment on a phone: the same result in a single column, with the study, whole-tumour volume
+and a "New study" button kept in a bar at the bottom of the screen.</sub>
 
 ![Model card screen](docs/screenshots/model-card.png)
 <sub>Model card: specification and test results, read from the evaluation files.</sub>
@@ -183,7 +193,9 @@ overwrites a checkpoint you trained yourself unless you pass `--force`. The weig
 as assets of the [`weights-v1` release](https://github.com/Lubabah-Hamouch/Brain-Tumour-Detector/releases/tag/weights-v1)
 for research use under the datasets' terms (see [Data and terms of use](#data-and-terms-of-use)).
 They are the served checkpoints with the optimizer state removed, and they load with
-`torch.load(..., weights_only=True)`.
+`torch.load(..., weights_only=True)`. `python -m src.export_weights` produced them: it strips the
+training checkpoints down to the weights and metadata the API reads and writes them, with their
+`SHA256SUMS`, to `models/release/`.
 
 **Requirements:**
 
@@ -218,7 +230,7 @@ python -m pip install -r requirements.txt -r requirements-backend.txt
   reported.
 
 ```powershell
-python -m src.download_data all                    # BraTS 2021 (~13 GB archive) and the classification dataset
+python -m src.download_data all                    # BraTS 2021 (~13 GB archive), the classification dataset and the 3-class Figshare comparison set
 python -m src.verify_data brats
 python -m src.verify_data classification
 python -m src.data.make_split data/manifests/figshare_4class_cleaning.json   # cleaned 70/15/15 classification split
@@ -354,7 +366,7 @@ terms, described above.
 ```
 backend/     FastAPI service: models, async jobs, results and report endpoints   (backend/README.md)
 frontend/    Next.js web client: Overview, Segment, Classify, Model card          (frontend/README.md)
-src/         Data preparation, training, evaluation, error analysis, rendering, weight download
+src/         Data preparation, training, evaluation, error analysis, rendering, weight export and download
 configs/     Training and preprocessing settings, one file per reported model
 data/        Local datasets (gitignored) and the committed split manifests        (data/README.md)
 reports/     final_results.md and machine-readable results in reports/results/

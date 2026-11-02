@@ -50,7 +50,8 @@ def main():
         digest = sha256(out)
         lines.append(f"{digest}  {asset}")
         print(f"{asset}: {out.stat().st_size / 1e6:.1f} MB  sha256 {digest}")
-    (OUT_DIR / "SHA256SUMS").write_text("\n".join(lines) + "\n")
+    # LF line endings on every platform, so `sha256sum -c` reads the file names correctly.
+    (OUT_DIR / "SHA256SUMS").write_text("\n".join(lines) + "\n", newline="\n")
 
 
 if __name__ == "__main__":

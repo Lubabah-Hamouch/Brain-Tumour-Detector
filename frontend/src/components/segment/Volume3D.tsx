@@ -59,7 +59,7 @@ export default function Volume3D({ url, visible, opacity }: Props) {
 
   return (
     <div
-      className={styles.volume}
+      className={styles.volume3d}
       data-state={state}
       data-layers={shown.join(",")}
       onPointerDown={() => setHint(false)}

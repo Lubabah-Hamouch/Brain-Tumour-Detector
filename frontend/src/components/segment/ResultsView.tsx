@@ -19,7 +19,7 @@ import type { Run } from "./types";
 const Volume3D = dynamic(() => import("./Volume3D"), {
   ssr: false,
   loading: () => (
-    <div className={styles.volume} data-state="loading">
+    <div className={styles.volume3d} data-state="loading">
       <div className={styles.volumeMessage}>
         <p>Loading the 3D viewer…</p>
       </div>
