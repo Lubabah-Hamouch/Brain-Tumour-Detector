@@ -20,8 +20,8 @@ connect them:
 Do the steps in this order: the VM first (sections 1–7), because Vercel needs its URL, then
 Vercel (8), then back to the VM to allow the Vercel URL (9).
 
-Credentials stay with you. You sign in to Oracle, DuckDNS and Vercel in the browser, and the SSH
-key you create stays on your machine. Nothing secret goes into this repository.
+Credentials stay with you. You sign in to Oracle, DuckDNS and Vercel in the browser, and the keys
+you create (the SSH key, and the OCI API key if you use the retry script) stay on your machine. Nothing secret goes into this repository.
 
 ## What you need
 
@@ -38,6 +38,7 @@ key you create stays on your machine. Nothing secret goes into this repository.
   - the cleaned classification test set in `data/processed/figshare_classification_4class_clean/test/`.
 - Optional: the Overview's 3D render, `frontend/public/generated/hero-3d.png`
   (`python -m src.visualization.render_hero`).
+- For the retry script in step 2.2 (option A): the OCI CLI, set up as described there.
 - `ssh` and `scp`. Both come with Windows 10 and 11 (OpenSSH); the commands below are for
   PowerShell.
 
@@ -100,8 +101,151 @@ Get-Content $HOME\.ssh\oracle_vm.pub
 Using your own key avoids the Windows file-permission errors that the key Oracle can generate for
 you often causes.
 
-**2.2 Create the instance.** In the console menu (☰): **Compute**, then **Instances**, then
-**Create instance**.
+**2.2 Create the instance.** Free Ampere capacity is often short: creating the instance can fail
+with "Out of host capacity" for hours or days in busy regions. It frees up from time to time, and
+the only thing to do is try again. There are two ways to do it:
+
+- **Option A: a script that retries for you** (recommended). It tries every 60–90 seconds until
+  it succeeds, and needs the OCI CLI set up once.
+- **Option B: the console.** Click through it once. If it reports out of capacity, try again
+  later, or switch to option A.
+
+Both create the same instance and need no account change or payment. Then continue with 2.3.
+
+### Option A: create it with the retry script
+
+`deploy/vm/create_instance.py` runs `oci compute instance launch` with the instance's settings. On
+"Out of host capacity" it waits 60–90 seconds and tries again, in each of the region's
+availability domains in turn. When the instance is running, it prints the instance's details and
+public IP. It only ever asks for an Always Free shape (2 OCPUs and 12 GB, or 1 OCPU and 6 GB if
+you agree, see A.5). It creates nothing if the compartment already has an Ampere A1 instance, and it
+stops on any error other than capacity, rate limiting or a temporary server error.
+
+**A.1 Install the OCI CLI** on your machine. It is a Python package. In PowerShell:
+
+```powershell
+python -m pip install --user oci-cli
+oci --version
+```
+
+If `oci` is not found, pip printed a warning naming the folder it installed it to; add that folder
+to your `PATH`. Oracle's own installers are another option:
+[Installing the CLI](https://docs.oracle.com/en-us/iaas/Content/API/SDKDocs/cliinstall.htm).
+
+**A.2 Create an API signing key** so the CLI can act for you:
+
+1. Collect two OCIDs in the console. Your **user OCID** is under the profile icon (top right),
+   then **My profile**, then **OCID** and **Copy**. The **tenancy OCID** is under the profile icon,
+   then **Tenancy: …**, then **OCID** and **Copy**. Also note your home region's identifier, e.g.
+   `eu-frankfurt-1`. It is shown under **Manage regions** in the region menu.
+2. Run `oci setup config`. Give the config location (Enter for the default `~/.oci/config`),
+   your user OCID, your tenancy OCID and the region, and answer **Y** to generate a new API
+   signing key pair, accepting the default key paths. A passphrase is optional.
+3. Upload the public key: profile icon, then **My profile**, then **API keys** (under
+   **Resources**, or the **Tokens and keys** tab), then **Add API key**, then **Paste a public
+   key**. Paste the contents of `~/.oci/oci_api_key_public.pem`:
+
+   ```powershell
+   Get-Content $HOME\.oci\oci_api_key_public.pem
+   ```
+
+   Click **Add**.
+4. Check that it works: `oci iam availability-domain list` lists your region's availability
+   domains. A new key can take a minute to become valid.
+
+The private key (`~/.oci/oci_api_key.pem`) stays on your machine. Treat it like a password: it can
+manage your Oracle account.
+
+**A.3 Create the network** (once). The script attaches the instance to an existing public subnet,
+which the console otherwise creates along with the instance:
+
+1. In the console menu (☰): **Networking**, then **Virtual cloud networks**, then **Actions** or
+   **Start VCN Wizard**.
+2. Choose **Create VCN with Internet Connectivity** and click **Start VCN Wizard**.
+3. **VCN name:** e.g. `brain-tumour-vcn`. Keep the other defaults, click **Next**, then
+   **Create**.
+4. Open the new VCN, then **Subnets**, then **public subnet-brain-tumour-vcn** (the *public*
+   one), and **Copy** its OCID.
+
+VCNs and subnets are Always Free. If you already have a VCN, e.g. from an earlier attempt with
+option B, use its public subnet instead. Section 3 later opens ports 80 and 443 on this
+subnet.
+
+**A.4 Fill in the settings.** From the repository root:
+
+```powershell
+Copy-Item deploy\vm\instance.env.example deploy\vm\instance.env
+notepad deploy\vm\instance.env
+```
+
+| Setting | Value |
+|---|---|
+| `OCI_COMPARTMENT_ID` | the tenancy OCID from A.2: the root compartment, where the free resources go |
+| `OCI_SUBNET_ID` | the public subnet's OCID from A.3 |
+| `SSH_PUBLIC_KEY_FILE` | the public key from 2.1: `~/.ssh/oracle_vm.pub` |
+| `OCI_IMAGE_ID` | leave empty: the script picks the newest **Canonical Ubuntu 24.04** aarch64 image (not "Minimal"). To choose one yourself, take an OCID from `oci compute image list --compartment-id <tenancy OCID> --operating-system "Canonical Ubuntu" --operating-system-version 24.04 --shape VM.Standard.A1.Flex` |
+| `OCI_AVAILABILITY_DOMAINS` | leave empty to try all of the region's in turn, or list some, comma-separated |
+| `INSTANCE_NAME` | e.g. `brain-tumour-api` |
+
+`instance.env` is gitignored. The same names also work as environment variables, which take
+precedence.
+
+**A.5 Run it.** First a dry run, which checks the settings and the CLI and prints the launch
+command without launching anything:
+
+```powershell
+python deploy/vm/create_instance.py --dry-run
+```
+
+Then let it retry:
+
+```powershell
+python deploy/vm/create_instance.py
+```
+
+Each attempt gets a line:
+
+```
+[2026-11-02 22:24:05] Attempt 1: 2 OCPU / 12 GB in xyz:EU-FRANKFURT-1-AD-1
+[2026-11-02 22:24:05]   out of host capacity
+[2026-11-02 22:24:05]   next attempt in 72 s
+```
+
+When the instance is created, the script waits until it is running and prints its name, OCID,
+shape, public IP and the `ssh` command. Then continue with 2.3.
+
+- **Stop it** with Ctrl+C. If you stop it during an attempt, check **Compute**, then
+  **Instances**; running the script again also reports an instance that was created.
+- **Keep the machine awake.** It only retries while it runs, and can take minutes or days. Leave
+  the window open and the computer from going to sleep.
+- **Rate limits:** if Oracle answers "Too many requests", the script waits longer between
+  attempts (up to 5 minutes), then returns to the normal interval.
+
+**The smaller fallback: 1 OCPU and 6 GB.** A smaller instance is sometimes easier to get. After 60
+failed attempts at 2 OCPUs and 12 GB (about 75 minutes), the script asks whether to switch. If
+you answer no, it keeps trying the full size and does not ask again. It is still Always Free, but:
+
+- **Memory is tight.** At its peak, the app uses about 6.5 GiB with Ubuntu and Caddy (see
+  [Sizing](#sizing)), and 6 GB is about 5.6 GiB. The swap file in step 5.4 is **required** on
+  this size, not optional. The API's 9 GB memory limit is then above the VM's memory, so swap is
+  what keeps a segmentation from exhausting it.
+- **Segmentations take about twice as long** on one core.
+- **You can resize later:** on the instance's page, **Edit**, then **Edit shape**, set 2 OCPUs
+  and 12 GB. This restarts the instance, and it can also fail for lack of capacity, in which case
+  the instance keeps its size.
+
+| Option | Effect |
+|---|---|
+| `--fallback-after N` | offer the smaller size after N failed attempts (default 60; `0` never offers) |
+| `--auto-fallback` | switch after N attempts without asking (for an unattended run) |
+| `--small` | ask for 1 OCPU and 6 GB from the start |
+| `--interval S` | average seconds between attempts (default 75, at least 60) |
+| `--max-attempts N` | give up after N attempts (default: keep trying until stopped) |
+| `--config PATH` | another settings file instead of `deploy/vm/instance.env` |
+
+### Option B: create it in the console
+
+In the console menu (☰): **Compute**, then **Instances**, then **Create instance**.
 
 1. **Name:** e.g. `brain-tumour-api`.
 2. **Image and shape**, click **Edit**:
@@ -120,7 +264,9 @@ you often causes.
    (`ssh-ed25519 AAAA… `).
 5. **Boot volume:** leave the default (about 50 GB). It counts towards the 200 GB of Always Free
    block storage; the app needs about 10 GB of it.
-6. Click **Create**. After a minute or two the state changes to **Running**.
+6. Click **Create**. After a minute or two the state changes to **Running**. If it reports
+   "Out of host capacity", try another **Availability domain** (under **Placement**), try again
+   later, or use option A.
 
 **2.3 Note the public IP.** On the instance's page, under **Instance access**, copy the **Public
 IP address**, e.g. `141.147.12.34`. The commands below write it as `<IP>`.
@@ -481,7 +627,9 @@ long-running VM does not fill its disk with them.
 
 | Symptom | Cause and fix |
 |---|---|
-| Creating the instance: "Out of capacity for shape VM.Standard.A1.Flex" | The region has no free Ampere capacity at the moment. Try another **Availability domain** in step 2.2 (under **Placement**), or try again later; capacity comes and goes. |
+| Creating the instance: "Out of capacity for shape VM.Standard.A1.Flex" | The region has no free Ampere capacity at the moment; it comes and goes. Let the script retry for you (step 2.2, option A), or in the console try another **Availability domain** (under **Placement**) and try again later. |
+| `create_instance.py`: `NotAuthenticated` or "config file … is invalid" | The API key is not set up or not uploaded yet (step 2.2, A.2). `oci iam availability-domain list` must work first. |
+| `create_instance.py`: `NotAuthorizedOrNotFound` or `InvalidParameter` | An OCID in `deploy/vm/instance.env` is wrong or from another region: check the compartment (the tenancy OCID) and the subnet (A.3, A.4). |
 | `ssh`: "Connection timed out" | Wrong IP, or the instance is not running. Port 22 is open by default; if you edited the security list, check that its rule for 22 is still there. |
 | `ssh`: "Permission denied (publickey)" | Use `-i $HOME\.ssh\oracle_vm` and the user `ubuntu`. The key must be the one pasted in step 2.2. |
 | `docker: permission denied … docker.sock` | You have not logged in again since adding `ubuntu` to the `docker` group (5.2). `exit` and connect again. |

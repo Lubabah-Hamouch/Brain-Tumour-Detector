@@ -61,6 +61,8 @@ figure*.png
 
 # Deployment bundle and the weights it is checked against (deploy/vm/build_bundle.py)
 build/
+# Your own OCIDs for deploy/vm/create_instance.py
+deploy/vm/instance.env
 
 # Experiment tracking (local run files)
 wandb/
