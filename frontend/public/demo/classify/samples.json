@@ -1,0 +1,42 @@
+[
+ {
+  "name": "Tr-me_1065.jpg",
+  "true_class": "meningioma",
+  "size_bytes": 19941,
+  "known_error": false,
+  "recorded_prediction": null,
+  "url": "/demo/classify/images/Tr-me_1065.jpg"
+ },
+ {
+  "name": "Te-pi_102.jpg",
+  "true_class": "pituitary",
+  "size_bytes": 35147,
+  "known_error": false,
+  "recorded_prediction": null,
+  "url": "/demo/classify/images/Te-pi_102.jpg"
+ },
+ {
+  "name": "Te-no_169.jpg",
+  "true_class": "notumor",
+  "size_bytes": 20280,
+  "known_error": false,
+  "recorded_prediction": null,
+  "url": "/demo/classify/images/Te-no_169.jpg"
+ },
+ {
+  "name": "Te-gl_12.jpg",
+  "true_class": "glioma",
+  "size_bytes": 20501,
+  "known_error": false,
+  "recorded_prediction": null,
+  "url": "/demo/classify/images/Te-gl_12.jpg"
+ },
+ {
+  "name": "Te-gl_350.jpg",
+  "true_class": "glioma",
+  "size_bytes": 8183,
+  "known_error": false,
+  "recorded_prediction": null,
+  "url": "/demo/classify/images/Te-gl_350.jpg"
+ }
+]

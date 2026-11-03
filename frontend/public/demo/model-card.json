@@ -1,0 +1,288 @@
+{
+ "headline": {
+  "served_accuracy_at_128px": 0.9816779170684667,
+  "original_accuracy_at_128px": 0.7492767598842816,
+  "served_accuracy": 0.982642237222758,
+  "original_accuracy": 0.982642237222758,
+  "mcnemar_p": 1.0
+ },
+ "specification": {
+  "segmentation": {
+   "patients": 1251,
+   "test_patients": 189,
+   "folds": 5,
+   "parameters": 16546857,
+   "patch_size": 128,
+   "et_min_voxels": 50
+  },
+  "classification": {
+   "images": 6951,
+   "split": {
+    "train": 0.7013379369874838,
+    "val": 0.14947489569846065,
+    "test": 0.14918716731405554
+   },
+   "parameters": 20182612,
+   "image_size": 384
+  }
+ },
+ "segmentation": {
+  "test_patients": 189,
+  "single_best_fold": "fold4",
+  "rows": [
+   {
+    "model": "fold4",
+    "post_processed": false,
+    "served": false,
+    "WT": 0.9217874847437526,
+    "TC": 0.8834771102287433,
+    "ET": 0.8565512315907367,
+    "mean": 0.8872719421877443
+   },
+   {
+    "model": "fold4",
+    "post_processed": true,
+    "served": false,
+    "WT": 0.9217874847437526,
+    "TC": 0.8834771102287433,
+    "ET": 0.8672133121169897,
+    "mean": 0.8908259690298285
+   },
+   {
+    "model": "ensemble",
+    "post_processed": false,
+    "served": false,
+    "WT": 0.9278141484778012,
+    "TC": 0.8938706130007119,
+    "ET": 0.8672621824851143,
+    "mean": 0.8963156479878758
+   },
+   {
+    "model": "ensemble",
+    "post_processed": true,
+    "served": true,
+    "WT": 0.9278141484778012,
+    "TC": 0.8938706130007119,
+    "ET": 0.8772995265236916,
+    "mean": 0.8996614293340682
+   }
+  ],
+  "ensemble_vs_single_best": {
+   "difference": 0.008835485008818339,
+   "ci95": [
+    0.003343324955908289,
+    0.015567367283950601
+   ],
+   "patients_better": 141,
+   "patients_worse": 48
+  },
+  "et_cleanup_on_ensemble": {
+   "difference": 0.0033457142857142882,
+   "ci95": [
+    -0.00035379585537918573,
+    0.008790481040564376
+   ],
+   "patients_better": 26,
+   "patients_worse": 44
+  },
+  "patients_without_et": 5,
+  "patients_without_et_scored_1": {
+   "raw": 3,
+   "post_processed": 5
+  },
+  "cross_validation": {
+   "mean": 0.8983242466488266,
+   "std": 0.004390992184266618,
+   "folds": 5
+  }
+ },
+ "classification": {
+  "test_images": 1037,
+  "models": [
+   {
+    "key": "A",
+    "name": "Original",
+    "change": "Flips, affine, intensity",
+    "checkpoint": "models/classification/best.pt",
+    "served": false,
+    "checkpoint_epoch": 7,
+    "test_images": 1037,
+    "accuracy": 0.982642237222758,
+    "macro_f1": 0.9825538764921167,
+    "accuracy_at_128px": 0.7492767598842816
+   },
+   {
+    "key": "B",
+    "name": "Crop",
+    "change": "+ random crop before letterbox",
+    "checkpoint": "models/classification_crop/best.pt",
+    "served": false,
+    "checkpoint_epoch": 9,
+    "test_images": 1037,
+    "accuracy": 0.9816779170684667,
+    "macro_f1": 0.981547711665427,
+    "accuracy_at_128px": 0.7753134040501446
+   },
+   {
+    "key": "C",
+    "name": "Crop + resolution",
+    "change": "+ down-sampling and JPEG re-encoding",
+    "checkpoint": "models/classification_crop_resdegrade/best.pt",
+    "served": false,
+    "checkpoint_epoch": 10,
+    "test_images": 1037,
+    "accuracy": 0.9778206364513018,
+    "macro_f1": 0.9777243212753968,
+    "accuracy_at_128px": 0.9710703953712633
+   },
+   {
+    "key": "D",
+    "name": "C, trained longer",
+    "change": "Early-stopping patience 10",
+    "checkpoint": "models/classification_crop_resdegrade_long/best.pt",
+    "served": true,
+    "checkpoint_epoch": 22,
+    "test_images": 1037,
+    "accuracy": 0.982642237222758,
+    "macro_f1": 0.9826833799179444,
+    "accuracy_at_128px": 0.9816779170684667
+   }
+  ]
+ },
+ "stress_test": {
+  "tumour_images": 778,
+  "conditions": [
+   {
+    "key": "original",
+    "label": "unmodified"
+   },
+   {
+    "key": "small_square",
+    "label": "225 \u00d7 225"
+   },
+   {
+    "key": "small_portrait",
+    "label": "210 \u00d7 234"
+   },
+   {
+    "key": "tiny_square",
+    "label": "128 \u00d7 128"
+   }
+  ],
+  "models": [
+   {
+    "key": "A",
+    "name": "Original",
+    "served": false,
+    "values": [
+     3,
+     12,
+     10,
+     250
+    ],
+    "accuracy": [
+     0.982642237222758,
+     0.9729990356798457,
+     0.9749276759884281,
+     0.7492767598842816
+    ]
+   },
+   {
+    "key": "B",
+    "name": "Crop",
+    "served": false,
+    "values": [
+     1,
+     14,
+     16,
+     213
+    ],
+    "accuracy": [
+     0.9816779170684667,
+     0.9749276759884281,
+     0.9710703953712633,
+     0.7753134040501446
+    ]
+   },
+   {
+    "key": "C",
+    "name": "Crop + resolution",
+    "served": false,
+    "values": [
+     2,
+     3,
+     3,
+     9
+    ],
+    "accuracy": [
+     0.9778206364513018,
+     0.9778206364513018,
+     0.9797492767598843,
+     0.9710703953712633
+    ]
+   },
+   {
+    "key": "D",
+    "name": "C, trained longer",
+    "served": true,
+    "values": [
+     2,
+     1,
+     1,
+     0
+    ],
+    "accuracy": [
+     0.982642237222758,
+     0.9807135969141755,
+     0.982642237222758,
+     0.9816779170684667
+    ]
+   }
+  ]
+ },
+ "limitations": [
+  {
+   "title": "Single test split per task",
+   "body": "The intervals above reflect patient sampling within that split, not variation between institutions or scanners. BraTS 2021 pools many institutions, but the test set comes from the same pool as the training data."
+  },
+  {
+   "title": "Classification has an image-format shortcut",
+   "body": "Image format (resolution, aspect ratio, source) is strongly correlated with class in this dataset, because the no-tumour class was assembled mainly from a different source than the tumour classes. On the test set, gliomas outside the dominant 512 \u00d7 512 format were misclassified 56% of the time (5 of 9), against 1.5% for 512 \u00d7 512 gliomas."
+  },
+  {
+   "title": "Limited coverage of scan types",
+   "body": "Tumour training images are mostly contrast-enhanced T1. A T2 glioma and a CT image in the test set are called \"no tumour\" by the format-robust model."
+  },
+  {
+   "title": "The classifier also confuses anatomy with pathology at the sella",
+   "body": "Normal slices through the sella turcica can be called \"pituitary\" (all 5 of the primary model's no-tumour images called pituitary are axial skull-base slices at that level), because the pituitary class is dominated by those views."
+  },
+  {
+   "title": "Classification is slice-level",
+   "body": "The 4-class dataset is a collection of single 2D slices without patient identifiers. Near-duplicate clustering prevents the most direct leakage, but different slices of the same patient could still fall in different splits."
+  },
+  {
+   "title": "Metric scope",
+   "body": "Segmentation is reported with Dice only. Boundary metrics such as the 95th percentile Hausdorff distance, also standard for BraTS, have not been computed."
+  },
+  {
+   "title": "No test-time augmentation",
+   "body": "Mirroring at inference is a common further improvement and was not used."
+  }
+ ],
+ "sources": [
+  "reports/results/segmentation_test.json",
+  "reports/results/segmentation_test_per_case.csv",
+  "reports/results/test_confidence_intervals.json",
+  "reports/results/format_stress_test.json",
+  "reports/results/classification_test.json",
+  "reports/results/classification_test_crop.json",
+  "reports/results/classification_test_crop_resdegrade.json",
+  "reports/results/classification_test_crop_resdegrade_long.json",
+  "reports/results/classification_comparison_resdegrade_long_vs_original.json",
+  "data/manifests/brats_5fold_splits.json",
+  "data/manifests/figshare_4class_split.csv",
+  "reports/final_results.md (Limitations)",
+  "the loaded models (parameter counts, patch and image size)"
+ ]
+}

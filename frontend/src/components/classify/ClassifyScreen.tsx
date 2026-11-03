@@ -48,7 +48,7 @@ export function ClassifyScreen() {
     setRunning(true);
     setRunError(null);
     try {
-      const response = await classify(target.file);
+      const response = await classify(target.file, target.sample);
       setDone({ result: response, target });
       window.scrollTo({ top: 0 });
     } catch (error) {

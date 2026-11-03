@@ -6,12 +6,13 @@ import type { NextConfig } from "next";
 // lockfiles in parent directories.
 const appRoot = path.resolve(__dirname);
 
-// Vercel sets VERCEL=1 during its builds. The browser's API address is fixed into the client bundle
-// at build time, so a build without it would produce a site that cannot reach the API: stop it here.
-if (process.env.VERCEL && !process.env.NEXT_PUBLIC_API_URL) {
-  throw new Error(
-    "NEXT_PUBLIC_API_URL is not set. Add it in the Vercel project under Settings > Environment Variables " +
-      "(the API's URL, e.g. https://brain-tumour-api.duckdns.org), then redeploy. See DEPLOYMENT.md.",
+// The browser's API address is fixed into the client bundle at build time. A production build
+// without it is the static demo (src/lib/api.ts): say so in the build log, so a forgotten variable
+// is not mistaken for a choice.
+if (process.env.NODE_ENV === "production" && !process.env.NEXT_PUBLIC_API_URL) {
+  console.log(
+    "NEXT_PUBLIC_API_URL is not set: building the static demo (samples only, from public/demo/). " +
+      "Set it to the API's URL for uploads; see DEPLOYMENT.md.",
   );
 }
 

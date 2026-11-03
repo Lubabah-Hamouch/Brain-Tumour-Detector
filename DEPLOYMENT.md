@@ -1,4 +1,43 @@
-# Deployment: Oracle Cloud VM (API) and Vercel (web client)
+# Deployment
+
+Two ways to put the app online for free:
+
+- **[Static demo](#static-demo-vercel-only)** (the deployed site): the web client on Vercel,
+  with no API. The samples, the test results and the model card are files saved from the API in
+  advance. Visitors can run the sample patient (2D and 3D) and the five classification samples;
+  their own uploads are not possible, since nothing runs the models.
+- **[Oracle Cloud VM and Vercel](#oracle-cloud-vm-api-and-vercel-web-client):** the full API
+  on a free VM, so visitors can also upload their own scans.
+
+## Static demo (Vercel only)
+
+**1. Export the static files** (only when the results, the models or the samples change). From
+the repository root, in the project environment, with the sample data in `data/` (see
+[What you need](#what-you-need)):
+
+```powershell
+python deploy/vm/build_bundle.py           # computes the sample results with the release weights
+python deploy/static/export_samples.py     # writes frontend/public/demo/
+```
+
+The export starts the API in-process and saves its answers to what the web client asks:
+the sample images and their classification results, the sample patient's segmentation (viewer
+slices, 3D surfaces, predicted label map, report PNGs), the results summary, the model card and
+the Overview's 3D render if you have generated it. These are the same files the VM deployment
+serves ([What becomes public](#before-you-start-what-becomes-public)): no raw BraTS volumes, and
+the script stops if any NIfTI file other than the label map ends up in the output. The
+segmentation report PNG is one per plane and sequence, with all labels at full opacity, because
+there is no server to draw the view on screen.
+
+Commit `frontend/public/demo/` and push: Vercel builds from GitHub.
+
+**2. Create the Vercel project** as in [section 8](#8-create-the-vercel-project-the-web-client),
+but **without** `NEXT_PUBLIC_API_URL` or `HERO_IMAGE_URL`. A production build without an API
+address is the static demo; the build log says `building the static demo`.
+
+To switch the site to a full API later, add `NEXT_PUBLIC_API_URL` and redeploy.
+
+## Oracle Cloud VM (API) and Vercel (web client)
 
 This deploys the app for free:
 
@@ -573,9 +612,9 @@ fixing the cause, wait a minute and check `docker compose logs caddy` again.
    `https://brain-tumour-detector.vercel.app`. Use this production domain, not the
    longer per-deployment URL.
 
-If the build fails with `NEXT_PUBLIC_API_URL is not set`, add the variable as in step 3:
-**Settings**, then **Environment Variables**. Then redeploy: **Deployments**, then **⋯** on the
-latest deployment, then **Redeploy**.
+If the build log says `building the static demo`, the variable is missing: add it as in step 3
+(**Settings**, then **Environment Variables**), then redeploy: **Deployments**, then **⋯** on
+the latest deployment, then **Redeploy**.
 
 `NEXT_PUBLIC_API_URL` is fixed into the site when it is built. After changing it, redeploy;
 saving the variable alone changes nothing.
@@ -739,7 +778,7 @@ long-running VM does not fill its disk with them.
 | Browser: the page loads, but the API answers 502 | Caddy is up, the API is not (yet). `docker compose logs api`: it may still be downloading the weights or loading the models. |
 | Build fails at `python -m backend.services.samples`, or the API logs show `BT_SAMPLE_RESULTS_REQUIRED` | The sample results are missing or were computed for other weights or settings. Rebuild the bundle and deploy it again ("Updating later"). |
 | API logs: `Download failed`, or a GitHub error | The weights could not be downloaded. Check that the repository's `weights-v1` release is public, then `docker compose restart api`. |
-| Vercel build: `NEXT_PUBLIC_API_URL is not set` | Add the variable (step 8.3) and redeploy. |
+| Site: "This online demo has no server…" on an upload, though the VM is running | The site was built without `NEXT_PUBLIC_API_URL` (its build log says `building the static demo`). Add the variable (step 8.3) and redeploy. |
 | Site: "The API at … is not reachable", or the Overview says the results are unavailable | `curl.exe -s https://<name>.duckdns.org/api/health` from your machine. If that fails, check `docker compose ps` on the VM, and that the instance is running (it may have been reclaimed; see [Staying within Always Free](#staying-within-always-free)). |
 | Console: "blocked by CORS policy" | `ALLOWED_ORIGIN` does not equal the site's address exactly (scheme, no trailing slash). Fix it with `update_origin.py` (section 9). Preview deployments have their own addresses; test on the production domain or add them. |
 | `docker compose ps` shows the API restarting, `docker inspect` says `OOMKilled` | It went past its 9 GB limit, which it should not do (see [Sizing](#sizing)). Look at `docker compose logs api` for what it was doing. |

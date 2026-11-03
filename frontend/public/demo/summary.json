@@ -1,0 +1,68 @@
+{
+ "segmentation": {
+  "test_patients": 189,
+  "model": "3D U-Net, 5-fold ensemble, ET post-processing",
+  "dice": {
+   "mean": 0.8996614293340682,
+   "WT": 0.9278141484778012,
+   "TC": 0.8938706130007119,
+   "ET": 0.8772995265236916
+  }
+ },
+ "classification": {
+  "test_images": 1037,
+  "model": "EfficientNetV2-S",
+  "checkpoint": "models/classification_crop_resdegrade_long/best.pt",
+  "accuracy": 0.982642237222758,
+  "accuracy_ci95": [
+   0.9727290649349141,
+   0.9889926802374542
+  ],
+  "macro_f1": 0.9826833799179444,
+  "accuracy_at_128px": 0.9816779170684667,
+  "checkpoint_epoch": 22,
+  "test_errors": 18,
+  "confusions": [
+   {
+    "classes": [
+     "glioma",
+     "meningioma"
+    ],
+    "errors": 5
+   },
+   {
+    "classes": [
+     "glioma",
+     "notumor"
+    ],
+    "errors": 5
+   },
+   {
+    "classes": [
+     "notumor",
+     "pituitary"
+    ],
+    "errors": 5
+   },
+   {
+    "classes": [
+     "meningioma",
+     "pituitary"
+    ],
+    "errors": 2
+   },
+   {
+    "classes": [
+     "glioma",
+     "pituitary"
+    ],
+    "errors": 1
+   }
+  ]
+ },
+ "sources": [
+  "reports/results/segmentation_test.json",
+  "reports/results/classification_test_crop_resdegrade_long.json",
+  "reports/results/format_stress_test.json"
+ ]
+}

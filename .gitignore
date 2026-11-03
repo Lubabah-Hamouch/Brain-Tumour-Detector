@@ -37,6 +37,9 @@ data/processed/*
 !data/processed/.gitkeep
 *.nii
 *.nii.gz
+# The static demo's predicted label map (deploy/static/export_samples.py): a model output, not a
+# raw volume, and the only NIfTI file that script allows in its output.
+!frontend/public/demo/segment/mask.nii.gz
 *.mat
 *.tar
 *.zip

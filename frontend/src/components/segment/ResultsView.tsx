@@ -9,7 +9,7 @@ import { Term, useDefinition } from "@/components/Term";
 import ws from "@/components/workspace/Workspace.module.css";
 import { regionColor } from "@/design/tokens";
 import { useEntryProgress } from "@/design/useEntryProgress";
-import type { LabelLayer, Plane, SegmentationResult, SequenceField } from "@/lib/api";
+import { STATIC_DEMO, type LabelLayer, type Plane, type SegmentationResult, type SequenceField } from "@/lib/api";
 import { sequenceTerm } from "@/lib/glossary";
 
 import styles from "./Segment.module.css";
@@ -76,12 +76,16 @@ export function ResultsView({ result, run, onNewStudy, initialView = "axial" }: 
   const wt = result.regions.WT.volume_ml || 1;
   const pp = result.post_processing;
 
-  const reportUrl = `${result.report_url}?${new URLSearchParams({
-    plane,
-    sequence,
-    labels: visible.map((l) => l.key).join(","),
-    opacity: String(opacity),
-  })}`;
+  // The API draws the report for what is on screen; the static demo has one per plane and sequence,
+  // with every label at full opacity.
+  const reportUrl = STATIC_DEMO
+    ? `${result.report_url}/${plane}_${sequence}.png`
+    : `${result.report_url}?${new URLSearchParams({
+        plane,
+        sequence,
+        labels: visible.map((l) => l.key).join(","),
+        opacity: String(opacity),
+      })}`;
   const shownNames = visible.map((l) => l.name.toLowerCase()).join(", ") || "no labels";
   const viewerLabel = view3d
     ? `Interactive 3D view of ${result.study}: the brain surface and the predicted ${shownNames} in red`
@@ -291,6 +295,8 @@ export function ResultsView({ result, run, onNewStudy, initialView = "axial" }: 
               <>
                 The <Term k="glb">.glb</Term> holds the surfaces shown here, for any glTF viewer or 3D tool.
               </>
+            ) : STATIC_DEMO ? (
+              "The PNG is this slice with all three labels burned in, for slides and reports."
             ) : (
               "The PNG is the slice on screen with the overlay burned in, for slides and reports."
             )}

@@ -1,15 +1,19 @@
 /**
  * Typed access to the FastAPI backend (backend/). Server components call it with
  * API_URL; the browser uses NEXT_PUBLIC_API_URL, which is fixed into the client bundle at build
- * time. In development both default to the local server. A production build has no default: without
- * an address every request fails with a message naming the missing variable, rather than quietly
- * calling localhost (next.config.ts also stops a Vercel build that lacks it).
+ * time. In development both default to the local server.
+ *
+ * A production build without an address is the static demo (STATIC_DEMO): the samples, the test
+ * results and the model card come from files that deploy/static/export_samples.py saved from the
+ * API into public/demo/, and uploads are not available, since nothing can run the models.
  */
 
 const DEV_API_URL = "http://127.0.0.1:8010";
 const configuredUrl = process.env.API_URL || process.env.NEXT_PUBLIC_API_URL;
 
 export const API_URL = (configuredUrl || (process.env.NODE_ENV === "production" ? "" : DEV_API_URL)).replace(/\/+$/, "");
+export const STATIC_DEMO = !API_URL;
+const DEMO = "/demo";
 
 export type ResultsSummary = {
   segmentation: {
@@ -95,7 +99,8 @@ export class ApiError extends Error {
 async function request<T>(path: string, init?: RequestInit): Promise<T> {
   if (!API_URL) {
     throw new ApiUnavailable(
-      "No API address is configured: set NEXT_PUBLIC_API_URL to the API's URL and rebuild the web client.",
+      "This online demo has no server to run the models on, so it shows the samples only. To try your own " +
+        "images, run the app on your computer (see the project's README).",
     );
   }
   let response: Response;
@@ -112,15 +117,26 @@ async function request<T>(path: string, init?: RequestInit): Promise<T> {
   return response.json();
 }
 
-export function getResultsSummary(): Promise<ResultsSummary> {
+/** A file of the static demo, as the API answered it (browser only). */
+async function demoFile<T>(path: string): Promise<T> {
+  const response = await fetch(`${DEMO}${path}`);
+  if (!response.ok) throw new ApiUnavailable(`The demo file ${DEMO}${path} is missing (${response.status}).`);
+  return response.json();
+}
+
+export async function getResultsSummary(): Promise<ResultsSummary> {
+  // Imported, not fetched: server components read it too.
+  if (STATIC_DEMO) return (await import("../../public/demo/summary.json")).default as unknown as ResultsSummary;
   return request("/api/results/summary");
 }
 
 export function getSamples(): Promise<Sample[]> {
-  return request("/api/samples");
+  return STATIC_DEMO ? demoFile("/classify/samples.json") : request("/api/samples");
 }
 
-export function classify(file: File): Promise<ClassificationResult> {
+/** `sample`: the file is that sample, unchanged; the static demo answers it with the saved result. */
+export function classify(file: File, sample?: Sample): Promise<ClassificationResult> {
+  if (STATIC_DEMO && sample) return demoFile(`/classify/results/${sample.name.replace(/\.[^.]+$/, "")}.json`);
   const form = new FormData();
   form.append("file", file);
   return request("/api/classify", { method: "POST", body: form });
@@ -227,6 +243,11 @@ export function segmentSampleStudy(): Promise<JobAccepted & { case: string }> {
   return request("/api/sample-study/segment", { method: "POST" });
 }
 
+/** The static demo's sample study result. Its `report_url` is a folder of `<plane>_<sequence>.png`. */
+export function getDemoSampleStudy(): Promise<SegmentationResult> {
+  return demoFile("/segment/result.json");
+}
+
 // ---- Model card ----
 
 export type PairedComparison = {
@@ -293,6 +314,7 @@ export type ModelCard = {
   sources: string[];
 };
 
-export function getModelCard(): Promise<ModelCard> {
+export async function getModelCard(): Promise<ModelCard> {
+  if (STATIC_DEMO) return (await import("../../public/demo/model-card.json")).default as unknown as ModelCard;
   return request("/api/results/model-card");
 }

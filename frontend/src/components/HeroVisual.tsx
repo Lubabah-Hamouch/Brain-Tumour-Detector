@@ -12,9 +12,12 @@ import styles from "./HeroVisual.module.css";
 
 // The hero is rendered from patient data, so it is generated locally and not committed
 // (see src/visualization/render_hero.py). A deployment without the file (Vercel builds from git)
-// can point HERO_IMAGE_URL at a hosted copy instead; see DEPLOYMENT.md.
+// can point HERO_IMAGE_URL at a hosted copy instead; see DEPLOYMENT.md. The static demo has its
+// own copy, made by deploy/static/export_samples.py.
 const HERO_SRC = "/generated/hero-3d.png";
 const HERO_FILE = path.join(process.cwd(), "public", "generated", "hero-3d.png");
+const DEMO_HERO_SRC = "/demo/hero-3d.png";
+const DEMO_HERO_FILE = path.join(process.cwd(), "public", "demo", "hero-3d.png");
 
 const LEGEND = [
   { label: "Whole tumour (edema)", color: regionColor.WT },
@@ -61,7 +64,8 @@ export function HeroVisual() {
  */
 async function HeroImage() {
   await connection();
-  const src = existsSync(HERO_FILE) ? HERO_SRC : process.env.HERO_IMAGE_URL;
+  const local = existsSync(HERO_FILE) ? HERO_SRC : existsSync(DEMO_HERO_FILE) ? DEMO_HERO_SRC : null;
+  const src = local ?? process.env.HERO_IMAGE_URL;
   return src ? (
     <Link href="/segment?demo=3d" className={styles.link} aria-label="View this patient in 3D: run the segmentation and open the interactive 3D view">
       <Image
@@ -71,7 +75,7 @@ async function HeroImage() {
         height={1200}
         priority
         // A hosted copy is served as is, so it needs no images.remotePatterns entry.
-        unoptimized={src !== HERO_SRC}
+        unoptimized={!local}
         className={styles.image}
       />
       <div aria-hidden="true" className={styles.sweep} />

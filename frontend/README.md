@@ -35,15 +35,19 @@ npm run start        # http://localhost:3000
 Other commands: `npm run lint`.
 
 The API address comes from `API_URL` (server side) or `NEXT_PUBLIC_API_URL`. `npm run dev`
-defaults to `http://127.0.0.1:8010`. A production build has no default: set `NEXT_PUBLIC_API_URL`
-before `npm run build` (it is fixed into the client bundle), or every API request fails with a
-message naming the variable. If the API is not running, the Overview still renders and the results
-section says so, with the command to start it.
+defaults to `http://127.0.0.1:8010`. For a production build, set `NEXT_PUBLIC_API_URL` before
+`npm run build` (it is fixed into the client bundle). If the API is not running, the Overview still
+renders and the results section says so, with the command to start it.
 
-**Vercel:** see [DEPLOYMENT.md](../DEPLOYMENT.md). On Vercel, `next.config.ts` stops the build if
-`NEXT_PUBLIC_API_URL` is missing, and skips the standalone output, which only the Docker image uses.
-`HERO_IMAGE_URL` (read at request time) points the Overview's 3D image at a hosted copy, because
-the render is not committed and so is not in a deployment built from git.
+**Static demo:** a production build without `NEXT_PUBLIC_API_URL` calls no API. The samples, test
+results and model card come from `public/demo/`, saved from the API by
+`deploy/static/export_samples.py`, and uploads say that this demo has no server. The build log
+says when it builds the static demo.
+
+**Vercel:** see [DEPLOYMENT.md](../DEPLOYMENT.md). On Vercel, `next.config.ts` skips the standalone
+output, which only the Docker image uses. `HERO_IMAGE_URL` (read at request time) points the
+Overview's 3D image at a hosted copy, because the render in `public/generated/` is not committed;
+the static demo uses its copy in `public/demo/` instead.
 
 ## Docker
 

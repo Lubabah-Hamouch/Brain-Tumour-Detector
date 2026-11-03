@@ -6,9 +6,11 @@ import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import {
   ApiError,
   ApiUnavailable,
+  getDemoSampleStudy,
   getSampleStudy,
   segmentSampleStudy,
   startSegmentation,
+  STATIC_DEMO,
   type SegmentationResult,
   type SequenceField,
 } from "@/lib/api";
@@ -145,6 +147,16 @@ export function SegmentScreen() {
     setRunError(null);
     const startedAt = performance.now();
     try {
+      if (STATIC_DEMO) {
+        // The saved result opens directly: there is no job to follow.
+        const saved = await getDemoSampleStudy();
+        const id = ++runCounter.current;
+        const uploadSeconds = (performance.now() - startedAt) / 1000;
+        setRun({ id, startedAt, header: null, files: null, sample: saved.study, statusUrl: null, uploadSeconds, preview: null });
+        setResult(saved);
+        setShowResults(true);
+        return;
+      }
       const accepted = await segmentSampleStudy();
       const id = ++runCounter.current;
       openDirectly.current = true;

@@ -336,9 +336,18 @@ docker compose -f docker-compose.yml -f docker-compose.gpu.yml up --build    # N
 
 ## Deployment
 
-The app runs within free tiers: the API in Docker on an Oracle Cloud Always Free VM (Ampere A1,
-CPU, always on), behind Caddy for automatic HTTPS, and the web client on Vercel.
-**[DEPLOYMENT.md](DEPLOYMENT.md)** lists every step.
+The deployed site is a static demo on Vercel: the web client with the sample patient, the five
+classification samples, the test results and the model card saved as files in advance
+(`deploy/static/export_samples.py`), and no API. Visitors can explore the samples in 2D and 3D,
+but cannot upload their own scans. For uploads, the full API also runs within free tiers: in
+Docker on an Oracle Cloud Always Free VM (Ampere A1, CPU, always on), behind Caddy for automatic
+HTTPS. **[DEPLOYMENT.md](DEPLOYMENT.md)** lists the steps for both.
+
+- **Static demo:** the export starts the API in-process and saves its answers to
+  `frontend/public/demo/`: results derived from the sample patient, never its raw volumes. A
+  production build without `NEXT_PUBLIC_API_URL` reads them instead of calling an API.
+
+For the VM:
 
 - **Bundle:** `deploy/vm/build_bundle.py` assembles what the VM runs: the code, the compose stack
   (`deploy/vm/`: the API and Caddy), the five sample images and the sample results computed in
@@ -399,7 +408,7 @@ tests/       Tests for the API, job queue, models, losses, preprocessing and tra
 models/      Trained checkpoints (gitignored; python -m src.download_weights)
 docs/        Screenshots for this README
 
-deploy/      VM bundle script, compose stack and Caddyfile                       (DEPLOYMENT.md)
+deploy/      Static demo export; VM bundle script, compose stack and Caddyfile   (DEPLOYMENT.md)
 
 docker-compose.yml, docker-compose.gpu.yml   Docker setup (backend/Dockerfile, frontend/Dockerfile)
 requirements*.txt                            Python dependencies: core, API, hero render
