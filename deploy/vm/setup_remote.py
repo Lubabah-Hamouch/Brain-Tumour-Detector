@@ -271,7 +271,7 @@ def main():
                 if attempt == 0:
                     log(f"  waiting for Caddy's certificate ({error})")
                 time.sleep(15)
-        notes.append(f"HTTPS not working yet after 3 minutes: see `docker compose logs caddy` on the VM")
+        notes.append("HTTPS not working yet after 3 minutes: see `docker compose logs caddy` on the VM")
         return "; ".join(notes)
 
     stages = [("Connect", connect), ("System", system), ("Firewall", firewall), ("Docker", docker),

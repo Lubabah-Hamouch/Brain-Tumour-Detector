@@ -2,12 +2,13 @@
 
 Two ways to put the app online for free:
 
-- **[Static demo](#static-demo-vercel-only)** (the deployed site): the web client on Vercel,
-  with no API. The samples, the test results and the model card are files saved from the API in
-  advance. Visitors can run the sample patient (2D and 3D) and the five classification samples;
-  their own uploads are not possible, since nothing runs the models.
-- **[Oracle Cloud VM and Vercel](#oracle-cloud-vm-api-and-vercel-web-client):** the full API
-  on a free VM, so visitors can also upload their own scans.
+- **[Static demo](#static-demo-vercel-only)**, the deployed site
+  ([brain-tumour-detector-iota.vercel.app](https://brain-tumour-detector-iota.vercel.app)): the
+  web client on Vercel, with no API. The samples, the test results and the model card are files
+  saved from the API in advance. Visitors can run the sample patient (2D and 3D) and the five
+  classification samples; their own uploads are not possible, since nothing runs the models.
+- **[Oracle Cloud VM and Vercel](#oracle-cloud-vm-api-and-vercel-web-client)** (optional, to
+  self-host): the full API on a free VM, so visitors can also upload their own scans.
 
 ## Static demo (Vercel only)
 
@@ -56,7 +57,7 @@ connect them:
 | Vercel project | `NEXT_PUBLIC_API_URL` | the API's URL, e.g. `https://brain-tumour-api.duckdns.org` |
 | `.env` on the VM | `ALLOWED_ORIGIN` | the Vercel site's URL, e.g. `https://brain-tumour-detector.vercel.app` |
 
-## The steps, and which are scripted
+### The steps, and which are scripted
 
 The Oracle side is scripted: four scripts in `deploy/vm/` do it from your machine, with the OCI
 CLI and SSH. What is left by hand needs a browser login.
@@ -95,7 +96,7 @@ OCIDs, the SSH key's path, the VM's IP and the domain. Credentials stay with you
 Oracle, DuckDNS and Vercel in the browser, and the keys (the SSH key, and the OCI CLI's API key)
 stay on your machine. Nothing secret goes into this repository.
 
-## What you need
+### What you need
 
 - An email address and a payment card for the Oracle Cloud sign-up (section 1). Oracle uses the
   card to verify your identity. An Always Free account is not charged.
@@ -114,7 +115,7 @@ stay on your machine. Nothing secret goes into this repository.
 - `ssh`, `scp` and `ssh-keygen`. They come with Windows 10 and 11 (OpenSSH); the commands below
   are for PowerShell.
 
-## Before you start: what becomes public
+### Before you start: what becomes public
 
 The API is public: the browser calls it without credentials. Anyone can call its endpoints,
 which serve:
@@ -141,7 +142,7 @@ The weights are not copied to the VM either. The API container downloads them fr
 Only ports 80 and 443 (Caddy) and 22 (SSH) are open to the internet. The API's own port is
 reachable only by Caddy, inside Docker.
 
-## 1. Create the Oracle Cloud account
+### 1. Create the Oracle Cloud account
 
 By hand, in the browser.
 
@@ -156,7 +157,7 @@ By hand, in the browser.
 4. Wait for the "Your account is ready" email (minutes, sometimes longer), then sign in at
    https://cloud.oracle.com.
 
-## 2. Set up the OCI CLI
+### 2. Set up the OCI CLI
 
 Once, on your machine. The scripts in sections 3 and 4 use the OCI CLI to act on your Oracle
 account; sections 6 and 9 need only SSH. If you do sections 3 and 4 by hand, skip this section.
@@ -197,7 +198,7 @@ to your `PATH`. Oracle's own installers are another option:
 The private key (`~/.oci/oci_api_key.pem`) stays on your machine. Treat it like a password: it can
 manage your Oracle account.
 
-## 3. Create the network, open the ports, make the SSH key
+### 3. Create the network, open the ports, make the SSH key
 
 ```powershell
 python deploy/vm/create_network.py --dry-run    # look up only: says what it would create
@@ -230,7 +231,7 @@ Then it:
 routes that are missing; it never deletes anything. Resources with other names, such as a VCN you
 made for something else, are left alone. All of it is free.
 
-### By hand
+#### By hand
 
 If you would rather click through it, or the script fails:
 
@@ -276,7 +277,7 @@ If you would rather click through it, or the script fails:
 
    The same names also work as environment variables, which take precedence.
 
-## 4. Create the VM
+### 4. Create the VM
 
 Free Ampere capacity is often short: creating the instance can fail with "Out of host capacity"
 for hours or days in busy regions. It frees up from time to time, and the only thing to do is try
@@ -341,7 +342,7 @@ you answer no, it keeps trying the full size and does not ask again. It is still
 | `--max-attempts N` | give up after N attempts (default: keep trying until stopped) |
 | `--config PATH` | another settings file instead of `deploy/vm/instance.env` |
 
-### By hand
+#### By hand
 
 In the console menu (☰): **Compute**, then **Instances**, then **Create instance**.
 
@@ -366,9 +367,9 @@ In the console menu (☰): **Compute**, then **Instances**, then **Create instan
    later, or use the script.
 
 Then, on the instance's page, under **Instance access**, copy the **Public IP address**, e.g.
-`141.147.12.34`. Section 6 takes it as `--ip`.
+`203.0.113.10`. Section 6 takes it as `--ip`.
 
-## 5. Point a DuckDNS subdomain at the VM
+### 5. Point a DuckDNS subdomain at the VM
 
 By hand, in the browser. Do it before section 6, so Caddy can get its certificate as soon as it
 starts.
@@ -381,21 +382,21 @@ starts.
 4. Check from your machine that the name resolves to the VM (it can take a minute):
 
 ```powershell
-Resolve-DnsName brain-tumour-api.duckdns.org
+Resolve-DnsName <name>.duckdns.org
 ```
 
 The answer must show the VM's IP. The IP does not change while the instance exists, so this is a
 one-time setting. Do not share the **token** shown on the DuckDNS page: it lets anyone change
 where your name points.
 
-## 6. Set up the VM and start the API
+### 6. Set up the VM and start the API
 
 From the repository root, in the project environment (the script builds the bundle, which needs
 it):
 
 ```powershell
 .\.venv\Scripts\Activate.ps1
-python deploy/vm/setup_remote.py --domain brain-tumour-api.duckdns.org
+python deploy/vm/setup_remote.py --domain <name>.duckdns.org
 ```
 
 It connects over SSH as `ubuntu`, with the key from section 3 and the IP saved by section 4
@@ -458,7 +459,7 @@ Three checks enforce that, so a bad bundle fails loudly instead of serving nothi
 - the image build on the VM runs the same check, and fails;
 - the API refuses to start without a matching file.
 
-### By hand
+#### By hand
 
 The same steps, over SSH. Lines marked PowerShell run on your machine; the others on the VM.
 
@@ -571,7 +572,7 @@ Press Ctrl+C to stop following (the stack keeps running). A healthy start shows:
 
 `docker compose ps` shows both services; the API turns `healthy` once its models are loaded.
 
-## 7. Check HTTPS and the API
+### 7. Check HTTPS and the API
 
 From your machine, open `https://<name>.duckdns.org/api/health` in the browser. It must load
 with a padlock and no certificate warning, and show `"status":"ok"`, `"device":"cpu"` and
@@ -580,11 +581,11 @@ with a padlock and no certificate warning, and show `"status":"ok"`, `"device":"
 Or in PowerShell:
 
 ```powershell
-curl.exe -s https://brain-tumour-api.duckdns.org/api/health
-curl.exe -s -o NUL -w "%{http_code} %{redirect_url}\n" http://brain-tumour-api.duckdns.org/api/health
+curl.exe -s https://<name>.duckdns.org/api/health
+curl.exe -s -o NUL -w "%{http_code} %{redirect_url}\n" http://<name>.duckdns.org/api/health
 ```
 
-The second line checks the redirect: it prints `308 https://brain-tumour-api.duckdns.org/api/health`.
+The second line checks the redirect: it prints `308 https://<name>.duckdns.org/api/health`.
 
 If the certificate does not arrive, see [When something is wrong](#when-something-is-wrong):
 nearly always DNS (section 5) or a closed port (sections 3 and 6). Caddy retries by itself, so after
@@ -592,7 +593,7 @@ fixing the cause, wait a minute and check `docker compose logs caddy` again.
 
 `https://<name>.duckdns.org` is the API's URL for the next steps.
 
-## 8. Create the Vercel project (the web client)
+### 8. Create the Vercel project (the web client)
 
 1. On vercel.com, click **Add New…**, then **Project**.
 2. Next to `Brain-Tumour-Detector`, click **Import**. If the repository is not listed, click
@@ -619,13 +620,13 @@ the latest deployment, then **Redeploy**.
 `NEXT_PUBLIC_API_URL` is fixed into the site when it is built. After changing it, redeploy;
 saving the variable alone changes nothing.
 
-## 9. Allow the Vercel site to call the API
+### 9. Allow the Vercel site to call the API
 
 The API answers browser requests only from the origins it allows. By default those are local
 development addresses. With your address from step 8.5:
 
 ```powershell
-python deploy/vm/update_origin.py https://brain-tumour-detector.vercel.app
+python deploy/vm/update_origin.py https://<project>.vercel.app
 ```
 
 Over SSH, it sets `ALLOWED_ORIGIN` in `~/brain-tumour-api/.env` on the VM and recreates only the
@@ -640,12 +641,12 @@ checks that the API answers your address with the CORS header
   the current list.
 - Later runs of `setup_remote.py` (e.g. to update the API) keep the address.
 
-### By hand
+#### By hand
 
 On the VM, in `~/brain-tumour-api`:
 
 ```bash
-nano .env        # ALLOWED_ORIGIN=https://brain-tumour-detector.vercel.app
+nano .env        # ALLOWED_ORIGIN=https://<project>.vercel.app
 docker compose up -d
 ```
 
@@ -654,16 +655,16 @@ docker compose up -d
 the API container with the new setting; `docker compose restart` would not, since a container
 keeps the environment it was created with.
 
-## 10. Check that they talk to each other
+### 10. Check that they talk to each other
 
 **From the command line** (with your two addresses):
 
 ```powershell
-curl.exe -s -D - -o NUL -H "Origin: https://brain-tumour-detector.vercel.app" https://brain-tumour-api.duckdns.org/api/health
+curl.exe -s -D - -o NUL -H "Origin: https://<project>.vercel.app" https://<name>.duckdns.org/api/health
 ```
 
 The headers must include
-`access-control-allow-origin: https://brain-tumour-detector.vercel.app`. If that line is missing,
+`access-control-allow-origin: https://<project>.vercel.app`. If that line is missing,
 `ALLOWED_ORIGIN` does not match the address exactly.
 
 **In the browser,** open the Vercel site with the developer tools open (F12, **Console** tab):
@@ -681,19 +682,19 @@ The headers must include
 Your own uploads run the models on the VM's 2 cores. A classification takes a few seconds. A
 segmentation takes roughly 15–30 minutes, with live progress (see [Sizing](#sizing)).
 
-## Always on: no cold starts
+### Always on: no cold starts
 
 The VM runs all the time, and so does the API. It downloads the weights once, when its container
-is first created, and keeps them across restarts and reboots. So unlike a scale-to-zero host
-(such as Google Cloud Run, where each new instance starts from scratch), there is no cold start: no weights download
-and no model loading when a visitor arrives after a quiet spell. Every request is answered at
-normal speed, and the sample buttons answer at once.
+is first created, and keeps them across restarts and reboots. So unlike a scale-to-zero host,
+where each new instance starts from scratch, there is no cold start: no weights download and no
+model loading when a visitor arrives after a quiet spell. Every request is answered at normal
+speed, and the sample buttons answer at once.
 
 The weights are downloaded again only when the API container is recreated: after an update
 (section "Updating later") or a change to `.env`. That takes about a minute, inside Oracle's
 network.
 
-## Sizing
+### Sizing
 
 **Memory: the app needs at most about 6 GiB; the VM has 12 GB.** Measured on this deployment
 (the bundle's image and compose stack, requests going through Caddy over HTTPS), with the API
@@ -738,7 +739,7 @@ still works.
 room. Docker's logs are capped at 30 MB per container (`logging` in `docker-compose.yml`), so a
 long-running VM does not fill its disk with them.
 
-## Staying within Always Free
+### Staying within Always Free
 
 - **Compute:** 2 OCPUs and 12 GB of Ampere A1 is the whole allowance, so do not create a second
   A1 instance alongside this one.
@@ -758,7 +759,7 @@ long-running VM does not fill its disk with them.
     Management**, then **Budgets**), since a paid account could then create resources that are
     not free.
 
-## When something is wrong
+### When something is wrong
 
 | Symptom | Cause and fix |
 |---|---|
@@ -783,7 +784,7 @@ long-running VM does not fill its disk with them.
 | Console: "blocked by CORS policy" | `ALLOWED_ORIGIN` does not equal the site's address exactly (scheme, no trailing slash). Fix it with `update_origin.py` (section 9). Preview deployments have their own addresses; test on the production domain or add them. |
 | `docker compose ps` shows the API restarting, `docker inspect` says `OOMKilled` | It went past its 9 GB limit, which it should not do (see [Sizing](#sizing)). Look at `docker compose logs api` for what it was doing. |
 
-## Updating later
+### Updating later
 
 - **Web client:** push to `main` on GitHub. Vercel builds and deploys each push automatically.
 - **API:** from the repository root, in the project environment:

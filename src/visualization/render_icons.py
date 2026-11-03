@@ -9,7 +9,6 @@ without the brackets so it stays sharp in a browser tab; larger sizes are supers
 
 Writes to frontend/src/app/, where Next.js picks the files up by name.
 """
-from pathlib import Path
 
 from PIL import Image, ImageDraw
 

@@ -15,6 +15,11 @@ Every reported number comes from test sets that were never used for training, ea
 checkpoint selection or tuning. Full methods, tables and confidence intervals are in
 **[reports/final_results.md](reports/final_results.md)**.
 
+**Live demo: [brain-tumour-detector-iota.vercel.app](https://brain-tumour-detector-iota.vercel.app)**.
+Open a held-out test patient's segmentation in 2D and 3D, classify the five test-set sample
+images, and read the model card. The demo has no server, so it shows pre-computed results for
+those samples only; to run the models on your own scans, [run it locally](#running-it-locally).
+
 > [!IMPORTANT]
 > **Not a medical device.** This is a research and portfolio demonstration. Its outputs must not
 > inform diagnosis or treatment, and it has not been validated on data from outside its training
@@ -103,9 +108,9 @@ and a "New study" button kept in a bar at the bottom of the screen.</sub>
 
 It has four screens:
 
-- **Overview.** The headline test results, read live from the evaluation outputs, with a 3D render
+- **Overview.** The headline test results, read from the evaluation outputs, with a 3D render
   of a held-out test patient's brain and predicted tumour. The render links to the live version:
-  the same patient is segmented on the spot and opened in the interactive 3D view.
+  the same patient's segmentation, opened in the interactive 3D view.
 - **Segment.** Drop the four NIfTI files of a study (or load the held-out sample study).
   - Each file is matched to its sequence from the file name, can be reassigned, and has its header
     checked in the browser.
@@ -336,18 +341,19 @@ docker compose -f docker-compose.yml -f docker-compose.gpu.yml up --build    # N
 
 ## Deployment
 
-The deployed site is a static demo on Vercel: the web client with the sample patient, the five
-classification samples, the test results and the model card saved as files in advance
-(`deploy/static/export_samples.py`), and no API. Visitors can explore the samples in 2D and 3D,
-but cannot upload their own scans. For uploads, the full API also runs within free tiers: in
-Docker on an Oracle Cloud Always Free VM (Ampere A1, CPU, always on), behind Caddy for automatic
-HTTPS. **[DEPLOYMENT.md](DEPLOYMENT.md)** lists the steps for both.
+The [deployed site](https://brain-tumour-detector-iota.vercel.app) is a static demo on Vercel:
+the web client with the sample patient, the five classification samples, the test results and the
+model card saved as files in advance (`deploy/static/export_samples.py`), and no API. Visitors can
+explore the samples in 2D and 3D, but cannot upload their own scans. To self-host with uploads,
+the full API also runs within free tiers: in Docker on an Oracle Cloud Always Free VM (Ampere A1,
+CPU, always on), behind Caddy for automatic HTTPS. **[DEPLOYMENT.md](DEPLOYMENT.md)** lists the
+steps for both.
 
 - **Static demo:** the export starts the API in-process and saves its answers to
   `frontend/public/demo/`: results derived from the sample patient, never its raw volumes. A
   production build without `NEXT_PUBLIC_API_URL` reads them instead of calling an API.
 
-For the VM:
+For the optional VM:
 
 - **Bundle:** `deploy/vm/build_bundle.py` assembles what the VM runs: the code, the compose stack
   (`deploy/vm/`: the API and Caddy), the five sample images and the sample results computed in
