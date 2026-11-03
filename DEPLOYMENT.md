@@ -609,9 +609,10 @@ fixing the cause, wait a minute and check `docker compose logs caddy` again.
        followed by `/api/hero.png`. This only works if the bundle has the render (its build in
        section 6 says if it has not). Without it, the Overview shows a note where the image would be.
 4. Click **Deploy**. The build takes 1–2 minutes.
-5. When it finishes, note the site's address. It is under **Domains** on the project page, e.g.
-   `https://brain-tumour-detector.vercel.app`. Use this production domain, not the
-   longer per-deployment URL.
+5. When it finishes, note the site's address. It is under **Domains** on the project page, in the
+   form `https://<project-name>.vercel.app` (this project's live demo is at
+   `https://brain-tumour-detector-iota.vercel.app`). Use that production domain, not the longer
+   per-deployment URL.
 
 If the build log says `building the static demo`, the variable is missing: add it as in step 3
 (**Settings**, then **Environment Variables**), then redeploy: **Deployments**, then **⋯** on
